@@ -130,6 +130,41 @@ class EditionTests(unittest.TestCase):
         p.write_text(p.read_text().replace('"4"', '"1026"'))
         self.assertEqual(deps.game_edition(self.steam)['edition'], 'incomplete')
 
+    def test_incomplete_download_message_identifies_steam_state(self):
+        self.windows()
+        p=self.steam/'appmanifest_438100.acf'
+        p.write_text(p.read_text().replace('"4"','"1026"'))
+        message=deps.edition_error(deps.game_edition(self.steam))
+        self.assertIn('StateFlags=1026',message)
+        self.assertIn('ダウンロード画面',message)
+        self.assertNotIn(str(self.steam),message)
+
+    def test_nested_apk_with_another_name_is_detected(self):
+        p=self.game/'android/content'
+        p.mkdir(parents=True)
+        with zipfile.ZipFile(p/'VRChat.APK','w') as archive:
+            archive.writestr('AndroidManifest.xml',b'fixture')
+        self.assertEqual(deps.game_edition(self.steam)['edition'],'android')
+
+    def test_apk_link_outside_game_is_never_read(self):
+        outside=self.steam.parent/'outside.apk';outside.write_text('private fixture')
+        (self.game/'VRChat.apk').symlink_to(outside)
+        with patch.object(deps.zipfile,'ZipFile') as read:
+            self.assertEqual(deps.game_edition(self.steam)['edition'],'unknown')
+            read.assert_not_called()
+
+    def test_invalid_library_metadata_gets_an_actionable_error(self):
+        (self.steam/'libraryfolders.vdf').write_text('"libraryfolders" {')
+        message=deps.edition_error(deps.game_edition(self.steam))
+        self.assertIn('Steamライブラリ',message)
+        self.assertIn('再起動',message)
+
+    def test_unknown_edition_lists_presence_without_private_paths(self):
+        message=deps.edition_error(deps.game_edition(self.steam))
+        self.assertIn('Windows実行ファイル=なし',message)
+        self.assertIn('APK数=0',message)
+        self.assertNotIn(str(self.steam),message)
+
     def test_android_in_another_steam_library_is_detected(self):
         other = self.steam.parent / 'other/steamapps'
         other.mkdir(parents=True)

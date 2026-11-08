@@ -7,9 +7,9 @@ Install it from a Windows PC; rendering and gameplay run on Frame. A separate re
 
 This is an unofficial project and is not endorsed by, affiliated with, or sponsored by Valve or VRChat. Steam, Steam Frame, VRChat, and other names and trademarks belong to their respective owners.
 
-**Developed by JITOME** · **Experimental alpha · MIT for original components** · **Current release: 0.3.4-alpha**
+**Developed by JITOME** · **Experimental alpha · MIT for original components** · **Current release: 0.3.5-alpha**
 
-[Download](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.4-alpha) · [Detailed installation guide (Japanese)](installer/README.ja.md) · [License](LICENSE.en.md)
+[Download](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.5-alpha) · [Detailed installation guide (Japanese)](installer/README.ja.md) · [License](LICENSE.en.md)
 
 ## Features
 
@@ -30,7 +30,7 @@ This is an unofficial project and is not endorsed by, affiliated with, or sponso
 
 ## Installation
 
-1. Download the **single distribution ZIP** from [Releases](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.4-alpha), use **Extract All** on Windows, and open `FrameSetup.exe`. The ZIP contains the installer and two license documents.
+1. Download the **single distribution ZIP** from [Releases](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.5-alpha), use **Extract All** on Windows, and open `FrameSetup.exe`. The ZIP contains the installer and two license documents.
 2. On Frame, enable Developer Mode and open **Settings → Developer → Pair New Host**. Menu wording may vary by language.
 3. Run the EXE on Windows, read the license terms, accept them, and click **Install (インストール)**. The installer interface is currently in Japanese.
 4. Approve the **`SteamFrame_Standalone_PCVR_VRChat`** request on Frame.
@@ -54,11 +54,11 @@ See the [detailed guide (Japanese)](installer/README.ja.md) for troubleshooting 
 
 On the development Frame, the user reported successful play in an instance with 80 people and in COMPLEX7, a world reported to exceed 800 MB. These are separate reports; they do not mean that COMPLEX7 was tested with 80 people. They do not establish support for displaying every avatar simultaneously or for every world.
 
-Version 0.3.4-alpha reduces distribution size without changing the MIT license terms. DFR, video, audio, and swap runtime code is unchanged from 0.3.0.
+Version 0.3.5-alpha improves installation diagnostics and FEX build temperature handling. During installation only, the hard stop is 95°C; the FEX build pauses at 92°C and resumes at or below 85°C. The DFR, video, audio, and swap runtime configuration is unchanged.
 On the same Frame, the exact EXE payload and bootstrap completed [uninstallation, reinstallation, and a subsequent VR launch (Japanese)](docs/REINSTALL_0_3_4.md) over authenticated SSH.
 A complete first-time Windows pairing, installation, administrator authentication, and uninstallation flow, as well as operation on another Frame, remains unverified.
 
-[Latest changes and validation (Japanese)](docs/RELEASE_0_3_4.md) · [Validation and limitations](docs/VALIDATION.md)
+[Latest changes and validation (Japanese)](docs/RELEASE_0_3_5.md) · [Validation and limitations](docs/VALIDATION.md)
 
 ## License and copyright notices
 

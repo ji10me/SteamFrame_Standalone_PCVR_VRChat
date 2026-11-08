@@ -37,9 +37,12 @@ def game_edition(steamapps):
     folders = steamapps / 'libraryfolders.vdf'
     if folders.exists():
         from framectl import read_vdf
-        data = at(read_vdf(folders), 'libraryfolders')
+        try:
+            data = at(read_vdf(folders), 'libraryfolders')
+        except (OSError, ValueError):
+            return {'edition': 'unknown', 'reason': 'library_metadata'}
         if not isinstance(data, dict):
-            return {'edition': 'unknown', 'reason': 'Steam library metadata is invalid'}
+            return {'edition': 'unknown', 'reason': 'library_metadata'}
         for value in data.values():
             name = at(value, 'path') if isinstance(value, dict) else None
             if isinstance(name, str) and Path(name).is_absolute():
@@ -49,7 +52,7 @@ def game_edition(steamapps):
     if not manifests:
         return {'edition': 'missing'}
     if len(manifests) != 1:
-        return {'edition': 'ambiguous', 'reason': 'Multiple Steam libraries contain VRChat'}
+        return {'edition': 'ambiguous', 'reason': 'multiple_libraries', 'library_count': len(manifests)}
     manifest = manifests[0]
     try:
         info = read_manifest(manifest)
@@ -59,19 +62,33 @@ def game_edition(steamapps):
         common = manifest.parent / 'common'
         game = common / relative
         game.resolve().relative_to(common.resolve())
-        if int(at(info, 'StateFlags') or 0) != 4:
-            return {'edition': 'incomplete', 'reason': 'Steam download/update has not completed'}
+        flags = int(at(info, 'StateFlags') or 0)
+        if flags != 4:
+            return {'edition': 'incomplete', 'reason': 'steam_state', 'state_flags': flags}
         executable = game / 'VRChat.exe'
-        apks = list(game.glob('*.apk')) + list(game.glob('*/base.apk'))
+        # Android depots may place the APK below another directory. Never follow
+        # a file link out of this game's directory or inspect an unlimited set.
+        apks = []
+        for candidate in game.rglob('*'):
+            if candidate.suffix.lower() != '.apk' or not candidate.is_file():
+                continue
+            if len(apks) >= 64:
+                return {'edition': 'unknown', 'reason': 'too_many_apks', 'state_flags': flags}
+            candidate.resolve().relative_to(game.resolve())
+            apks.append(candidate)
+        if executable.is_file():
+            executable.resolve().relative_to(game.resolve())
         windows = executable.is_file() and binary_arch(executable) == 'PE-x86_64'
         android = False
         for apk in apks:
             with zipfile.ZipFile(apk) as archive:
                 android |= 'AndroidManifest.xml' in archive.namelist()
         edition = 'mixed' if windows and android else 'windows' if windows else 'android' if android else 'unknown'
-        return {'edition': edition, 'steamapps': str(manifest.parent), 'game': str(game)}
+        return {'edition': edition, 'steamapps': str(manifest.parent), 'game': str(game),
+                'state_flags': flags, 'windows_executable': 'valid' if windows else 'unrecognized' if executable.is_file() else 'missing',
+                'apk_count': len(apks), 'reason': 'no_recognized_files' if edition == 'unknown' else None}
     except (OSError, ValueError, zipfile.BadZipFile):
-        return {'edition': 'unknown', 'reason': 'VRChat edition could not be verified'}
+        return {'edition': 'unknown', 'reason': 'unreadable_or_invalid_files'}
 
 
 def edition_error(info):
@@ -82,7 +99,20 @@ def edition_error(info):
         return ANDROID_NOTICE
     if edition == 'missing':
         return 'VRChatが未導入です。インストール時にSteamからWindows版を取得します。'
-    return 'VRChatの版または導入状態を確認できません。既存データを変更せず停止しました。'
+    if edition == 'incomplete':
+        return ('VRChatの取得・更新が未完了です（StateFlags=' + str(info.get('state_flags', '?')) + '）。'
+                'FrameのSteamのダウンロード画面で完了させ、VRChatを終了してから再実行してください。既存データは変更していません。')
+    if edition == 'mixed':
+        return 'VRChatのWindows版とAndroid版のファイルが混在しています。SteamでVRChatのファイル整合性を確認してください。推測で削除せず停止しました。'
+    if edition == 'ambiguous':
+        return '複数のSteamライブラリにVRChatがあります。Steamで使用する配置を確認してください。既存データは変更していません。'
+    if info.get('reason') == 'library_metadata':
+        return 'Steamライブラリの情報を読み取れません。Steamのダウンロード完了を確認してFrameを再起動し、再実行してください。既存データは変更していません。'
+    detail = ('（StateFlags=' + str(info.get('state_flags', '?')) +
+              ' / Windows実行ファイル=' + {'valid': '確認済み', 'missing': 'なし', 'unrecognized': '形式不明'}.get(info.get('windows_executable'), '未確認') +
+              ' / APK数=' + str(info.get('apk_count', '?')) + '）')
+    return ('VRChatの版を確認できません' + detail + '。'
+            'FrameのSteamでVRChatのファイル整合性とダウンロード完了を確認してください。既存データを変更せず停止しました。')
 
 
 def tool_complete(steamapps, appid):

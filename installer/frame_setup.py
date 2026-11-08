@@ -21,12 +21,15 @@ import time
 sys.dont_write_bytecode = True
 KIT = Path(__file__).resolve().parent
 sys.path.insert(0, str(KIT / 'support'))
-VERSION = 'alpha-dfr-h264-swap-20261108-0.3.4'
+VERSION = 'alpha-dfr-h264-swap-20261109-0.3.5'
 FEX_COMMIT = '6effd2384085818345ec32e6abb4181c7135a9a7'
 RUNTIME = ('FEX', 'FEXBash', 'FEXGetConfig', 'FEXOfflineCompiler', 'FEXServer', 'FEXServerManager', 'FEXpidof')
 DFR_HASHES = {'d3d11.dll': 'a112b719c417c78abe13de88bd6c9be45aac252a9c153ad432740b0a44298db0',
               'dxgi.dll': 'ae23062e195df360abbed15cafba0e2814324c920c2f40fc8b4865538538d89d'}
 GST_HASH = '3f6417451f0060f5d573fded651b4fac9c751f0226e45ce6fcb6c958cd6643a6'
+INSTALL_TEMPERATURE_LIMIT = 95
+BUILD_PAUSE_TEMPERATURE = 92
+BUILD_RESUME_TEMPERATURE = 85
 MF_HASH = 'e4c80315b6d1bc9ad80c1ec3a19ec0247d7435082d18a0f8938bd00577c398e0'
 
 def sha(path):
@@ -100,29 +103,76 @@ def sensors():
     mem = next(int(l.split()[1])*1024 for l in Path('/proc/meminfo').read_text().splitlines() if l.startswith('MemAvailable:'))
     return max(values), mem
 
-def run(command, folder, label, env=None, timeout=3600):
+def resource_error(temp, mem, free, elapsed, timeout, label, *, startup=False):
+    """Only numeric installation diagnostics; no account data or raw logs."""
+    ram_limit = (2 if startup else 1)*1024**3
+    reason = ('温度上限'+str(INSTALL_TEMPERATURE_LIMIT)+'℃' if temp >= INSTALL_TEMPERATURE_LIMIT else
+              '空きRAM不足（必要量'+str(ram_limit//1024**3)+'GiB）' if mem < ram_limit else
+              '空き容量不足（必要量512MiB）' if free < 512*1024**2 else
+              '作業時間の上限' if elapsed > timeout else None)
+    if reason is None:return None
+    advice = ('Frameを通気のよい場所で休ませてから再実行してください。' if temp >= INSTALL_TEMPERATURE_LIMIT else
+              'VRChatや他のアプリを終了してから再実行してください。' if mem < ram_limit else
+              'Frameのストレージ空き容量を増やしてから再実行してください。' if free < 512*1024**2 else
+              '通信状態とFrame内の導入ログを確認してください。')
+    return (label+'を停止: '+reason+'。温度='+format(temp,'.1f')+'℃、空きRAM='+format(mem/1024**3,'.2f')+
+            'GiB、空き容量='+format(free/1024**3,'.2f')+'GiB、作業時間='+str(int(elapsed))+'秒。'+advice+
+            ' 共有Steam部品と起動設定は上書きしません。')
+
+def run(command, folder, label, env=None, timeout=3600, cool_build=False):
     """Keep compiler output on the recipient, bound process group and resources."""
     temp, mem = sensors()
-    if temp >= 85 or mem < 2*1024**3: raise RuntimeError('温度85℃未満・空きRAM 2GiB以上で再実行してください。')
+    error = resource_error(temp,mem,shutil.disk_usage(folder).free,0,timeout,label,startup=True)
+    if error:raise RuntimeError(error)
+    # This supervises only our own build process group, never Steam or the game.
+    cooling_total=0.0
+    if cool_build and temp>=BUILD_PAUSE_TEMPERATURE:
+        emit('cooling','FEX作成前の温度調整を待っています。85℃以下で開始します。電力モード・クロックは変更しません。')
+        while temp>BUILD_RESUME_TEMPERATURE:
+            if cooling_total>=900:raise RuntimeError('FEXの温度調整が15分以内に完了しません。Frameを通気のよい場所で休ませて再実行してください。')
+            time.sleep(1);cooling_total+=1
+            temp,mem=sensors()
+            error=resource_error(temp,mem,shutil.disk_usage(folder).free,0,timeout,label,startup=True)
+            if error:raise RuntimeError(error)
+    before_build_cooling=cooling_total
     with (folder/(label+'.log')).open('x') as log:
         child = subprocess.Popen(list(map(str, command)), stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                  env=env, start_new_session=True)
-        started = time.monotonic();notice=started+20
+        started = time.monotonic();notice=started+20;paused_at=None
         try:
             while child.poll() is None:
                 temp, mem = sensors()
-                if temp >= 85 or mem < 1024**3 or shutil.disk_usage(folder).free < 512*1024**2 or time.monotonic()-started > timeout:
-                    raise RuntimeError('温度・メモリー・容量・時間の上限に達しました。元の構成を維持します。')
-                if time.monotonic()>=notice:
-                    emit('working','専用環境の作成を続けています。接続を維持してお待ちください。')
-                    notice=time.monotonic()+20
+                now=time.monotonic()
+                paused_seconds=now-paused_at if paused_at is not None else 0
+                elapsed=now-started-(cooling_total-before_build_cooling+paused_seconds)
+                error=resource_error(temp,mem,shutil.disk_usage(folder).free,max(0,elapsed),timeout,label)
+                if error:raise RuntimeError(error)
+                if cool_build:
+                    if paused_at is None and temp>=BUILD_PAUSE_TEMPERATURE:
+                        with contextlib.suppress(ProcessLookupError):os.killpg(child.pid,signal.SIGSTOP)
+                        paused_at=now
+                        emit('cooling','温度'+format(temp,'.1f')+'℃のためFEX作成だけを一時停止しました。85℃以下で自動再開します。')
+                    elif paused_at is not None and temp<=BUILD_RESUME_TEMPERATURE:
+                        with contextlib.suppress(ProcessLookupError):os.killpg(child.pid,signal.SIGCONT)
+                        cooling_total+=now-paused_at;paused_at=None
+                        emit('build-fex','温度'+format(temp,'.1f')+'℃を確認し、FEX作成を再開しました。')
+                    if cooling_total+(now-paused_at if paused_at is not None else 0)>=900:
+                        raise RuntimeError('FEX作成中の温度調整が合計15分に達しました。Frameを通気のよい場所で休ませて再実行してください。')
+                if now>=notice:
+                    message=('温度調整を待っています。' if paused_at is not None else '専用環境の作成を続けています。')
+                    emit('working',message+' 温度='+format(temp,'.1f')+'℃、空きRAM='+format(mem/1024**3,'.2f')+'GiB。接続を維持してください。')
+                    notice=now+20
                 time.sleep(.2)
             if child.returncode: raise RuntimeError(label+'に失敗しました。Frame内の導入ログを確認してください。')
         finally:
             if child.poll() is None:
-                os.killpg(child.pid, signal.SIGTERM)
+                with contextlib.suppress(ProcessLookupError):os.killpg(child.pid, signal.SIGTERM)
+                if paused_at is not None:
+                    with contextlib.suppress(ProcessLookupError):os.killpg(child.pid, signal.SIGCONT)
                 try: child.wait(timeout=5)
-                except subprocess.TimeoutExpired: os.killpg(child.pid, signal.SIGKILL); child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    with contextlib.suppress(ProcessLookupError):os.killpg(child.pid, signal.SIGKILL)
+                    child.wait(timeout=5)
 
 def paths(home=None):
     home = Path(home or Path.home()); steam = home/'.local/share/Steam/steamapps'
@@ -244,8 +294,8 @@ def prepare_runtime(release, p):
     stage=audited_local_candidate(p['home'])
     if stage is None:
         emit('build-fex','初回用のFEXを作成しています。時間がかかる場合があります。')
-        env=dict(os.environ,FEX_FRAME_WORK=str(release/'build-fex'),FEX_FRAME_JOBS='2',PYTHONDONTWRITEBYTECODE='1')
-        run(['sh',KIT/'support/scripts/build-fex-stage.sh'],work,'build-fex',env)
+        env=dict(os.environ,FEX_FRAME_WORK=str(release/'build-fex'),FEX_FRAME_JOBS='1',PYTHONDONTWRITEBYTECODE='1')
+        run(['sh',KIT/'support/scripts/build-fex-stage.sh'],work,'build-fex',env,timeout=7200,cool_build=True)
         stages=list((release/'build-fex').glob('*/stage'))
         if len(stages)!=1:raise RuntimeError('FEXのビルド結果を特定できません。')
         stage=stages[0]
@@ -405,7 +455,11 @@ def install(accept=False, uninstall_android=False):
     if platform.system()!='Linux' or platform.machine() not in ('aarch64','arm64') or os.geteuid()==0:raise RuntimeError('Steam Frameの通常ユーザーで実行してください。')
     if game_active():raise RuntimeError('VRChatを完全に終了してから再実行してください。')
     p=paths();root=p['base']
-    if (root/'installation.json').exists():raise RuntimeError('導入済みです。再導入する場合は先にアンインストールしてください。')
+    if (root/'installation.json').exists():
+        previous=json.loads((root/'installation.json').read_text())
+        if previous.get('phase')!='installed':
+            raise RuntimeError('前回の導入が未完了です。同じEXEの「アンインストール」で未完了の専用配置を片付けてから、再度インストールしてください。Steam管理のVRChat本体・共有互換ツールは残します。')
+        raise RuntimeError('導入済みです。再導入する場合は先にアンインストールしてください。')
     prepare_existing_game(p,uninstall_android)
     root.mkdir(mode=0o700,parents=True,exist_ok=True)
     old=options_get();releases=root/'releases';releases.mkdir(exist_ok=True)
