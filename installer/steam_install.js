@@ -49,10 +49,10 @@ async function(request) {
     return {phase: 'continued'};
   }
   if (request.action === 'resume') {
-    if (request.appid !== 438100 || state.phase !== 'idle' ||
+    if (!['idle','complete'].includes(state.phase) ||
         typeof SteamClient.Downloads?.ResumeAppUpdate !== 'function')
-      throw Error('VRChat download is not ready to resume');
-    await SteamClient.Downloads.ResumeAppUpdate(438100, '0');
+      throw Error('Steam download is not ready to resume; resume it on Frame');
+    await SteamClient.Downloads.ResumeAppUpdate(request.appid, '0');
     return {phase: 'resumed'};
   }
   return state;

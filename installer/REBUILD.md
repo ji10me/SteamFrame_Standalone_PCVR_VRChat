@@ -2,7 +2,8 @@
 
 配布ZIPを展開し、EXEの「利用許諾・ソース」で`frame-payload-with-sources.zip`を取り出すと、実際の修正を含むGStreamer source tree、
 DXVK source snapshot、元ライセンス、OpenVR/gaze headersを参照できます。
-FEXは固定コミットから受取人が取得・ビルドするため、そのソース・依存部品も受取人のFrame内に残ります。
+FEXは固定コミットのソースから作成したARM64 Runtimeを同梱します。FEXソース全体はEXE内には含めません。
+下記「FEXの再ビルド」から元ソースと依存部品を取得できます。上流ソース自体は変更していません。
 
 ## GStreamerの修正版
 
@@ -83,3 +84,14 @@ LLVMの`--strip-debug`でdebug情報を除去した後、ELFの`.rodata` / PEの
 元/配布hashと置換数は各`strip-proof.json`に記録します。
 GStreamerはdebug除去段階では全SHF_ALLOC sectionが不変であることも確認します。
 この正規化は診断表示用データだけの変更で、視線・描画・動画・音声処理の変更ではありません。
+
+## FEXの再ビルド
+
+元ソースは`https://github.com/StonkGuy/FEX`の`6effd2384085818345ec32e6abb4181c7135a9a7`（`eac-2610.5`）です。
+同梱の`payload/fex/runtime.tar.xz`を展開すると、`PREBUILT.json`に部品hashとsubmoduleのコミットを確認できます。
+元のFEXとFEXCore、依存部品のライセンスを変更せず保持してください。ソース取得時は上流の貢献規約も確認してください。
+
+本リポジトリの`scripts/build-fex-stage.sh`、またはEXE内ソースZIPの`support/scripts/build-fex-stage.sh`がビルド用ラッパーです。
+ARM64 Linux上でclang・cmake・ninja・lld・git・Pythonを用意し、ソースとsubmoduleの固定コミット一致・変更なしを検査して作成します。
+コンパイラーとOSの違いにより同じbinary hashになるとは限りません。再ビルドしたものを共有Steam部品へ上書きしないでください。
+通常の配布EXEではFEX本体の再ビルドは行いません。小さな接続用部品の作成とVulkanの検査は引き続きFrameで行います。

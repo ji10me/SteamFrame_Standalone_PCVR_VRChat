@@ -7,9 +7,9 @@ Windows PCから導入し、プレイ中の描画・処理はFrame内で行い�
 
 本プロジェクトはValveおよびVRChatの公式製品ではなく、両社による承認・提携・支援を受けたものではありません。Steam、Steam Frame、VRChatなどの名称・商標は、それぞれの権利者に帰属します。
 
-**開発：JITOME** · **アルファ版 · 独自部分はMIT** · **現在の配布版：0.3.5-alpha**
+**開発：JITOME** · **アルファ版 · 独自部分はMIT** · **現在の配布版：0.3.6-alpha**
 
-[ダウンロード](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.5-alpha) · [詳しいインストール方法](installer/README.ja.md) · [利用許諾](LICENSE.md)
+[ダウンロード](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.6-alpha) · [詳しいインストール方法](installer/README.ja.md) · [利用許諾](LICENSE.md)
 
 ## できること
 
@@ -30,7 +30,7 @@ Windows PCから導入し、プレイ中の描画・処理はFrame内で行い�
 
 ## インストール
 
-1. [Releases](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.5-alpha)から **配布ZIPを1つ** ダウンロードし、Windowsで「すべて展開」して `FrameSetup.exe` を開きます。ZIPにはインストーラーと2つのライセンス文書が入っています。
+1. [Releases](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.6-alpha)から **配布ZIPを1つ** ダウンロードし、Windowsで「すべて展開」して `FrameSetup.exe` を開きます。ZIPにはインストーラーと2つのライセンス文書が入っています。
 2. Frameで開発者モードを有効にし、「設定 → 開発者 → 新しいホストをペアリング」を開きます。
 3. WindowsでEXEを起動し、利用条件を確認して「インストール」を押します。
 4. Frame側に表示される **`SteamFrame_Standalone_PCVR_VRChat`** の要求を承認します。
@@ -54,11 +54,11 @@ Android版VRChatが見つかった場合は、削除の確認が表示されま�
 
 開発用Frameでは、80人在室のインスタンスと、800MB超のワールド「COMPLEX7」で動作したとの報告があります。別々の利用報告であり、COMPLEX7で80人を検証したという意味ではありません。全アバター同時表示や、全てのワールドでの動作を保証しません。
 
-0.3.5-alphaは、導入状態の診断とFEX作成時の温度待ちを改善した版です。インストール時だけ95℃を停止上限とし、FEX作成は92℃で一時停止・85℃以下で再開します。DFR・動画・音声・補助スワップの実行構成は従来と同じです。
+0.3.6-alphaはビルド済みFEXを同梱し、初回のFEX本体コンパイルを省きます。導入済みProtonの検出とダウンロード待ちも改善しました。DFR・動画・音声・補助スワップの実行構成は従来と同じです。
 同じFrameで、EXE内と同一の処理による[アンインストール・再インストールとVR起動](docs/REINSTALL_0_3_4.md)を確認しました。
 Windows実機での初回ペアリングから導入・管理者認証・削除までの通し操作と、別Frameでの動作は引き続き未検証です。
 
-[最新版の変更と確認範囲](docs/RELEASE_0_3_5.md) · [検証範囲と未検証事項](docs/VALIDATION.md)
+[最新版の変更と確認範囲](docs/RELEASE_0_3_6.md) · [検証範囲と未検証事項](docs/VALIDATION.md)
 
 ## 利用条件・著作権表示
 
@@ -74,6 +74,8 @@ Windows実機での初回ペアリングから導入・管理者認証・削除�
 本プログラムは無保証です。使用・改変・導入・削除に伴う機器の故障、過熱、データ損失等について、法令で認められる範囲で保証・修理・補償・損害賠償等の責任を負いません。詳しくは [無保証について](LICENSE.md#無保証について) を参照してください。
 
 ## 開発資料・謝辞
+
+インストールで止まる場合は、最新版で再試行したうえで[不具合報告](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/issues/new?template=installation.yml)へ、インストーラー版・SteamOSのチャンネルと版・画面のエラー文を記載してください。認証情報・個人パス・IP・Prefixは公開しないでください。
 
 | 資料 | 内容 |
 |---|---|

@@ -1,0 +1,50 @@
+name: Installation problem / インストールの不具合
+description: Report installation detection, download or setup failures.
+title: "[Install] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please use the latest installer first. This is a public issue: omit passwords, keys, tokens, Steam IDs, personal paths and IP addresses. Do not attach your Wine prefix or raw account logs.
+        最新版で再試行した結果を記載してください。公開Issueなので、パスワード・鍵・トークン・Steam ID・個人パス・IPは伏せてください。Prefixやアカウントの生ログは添付しないでください。
+  - type: input
+    id: version
+    attributes:
+      label: Installer version / インストーラー版
+      placeholder: 0.3.6-alpha
+    validations:
+      required: true
+  - type: dropdown
+    id: channel
+    attributes:
+      label: SteamOS channel / 更新チャンネル
+      options:
+        - Stable / 安定版
+        - Beta / ベータ版
+        - Other or unknown / その他・不明
+    validations:
+      required: true
+  - type: input
+    id: os_build
+    attributes:
+      label: SteamOS version or build / バージョン・ビルド番号
+  - type: textarea
+    id: existing_installation
+    attributes:
+      label: Existing VRChat and Proton / 導入済みのVRChat・Proton
+      description: Android or Windows VRChat, Proton Experimental installation, other Steam libraries, and whether an earlier setup failed. Do not post private paths.
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message and step / エラー文と停止した段階
+      description: Include numeric StateFlags, temperature or memory readings if shown. Redact private details from screenshots.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps / 再現手順
+      description: What you tried, what happened, and what you expected.

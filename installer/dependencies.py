@@ -8,6 +8,8 @@ import zipfile
 TOOLS = {1493710: 'Proton Experimental', 1826330: 'Proton EasyAntiCheat Runtime',
          3127680: 'FEX-Emu', 4183110: 'SteamLinuxRuntime 4'}
 APPS = {438100: 'VRChat', **TOOLS}
+# Running, validation, allocation, download, staging, commit or stop-in-progress.
+ACTIVE_TOOL_UPDATE_FLAGS=256|131072|262144|524288|1048576|2097152|4194304|8388608
 ANDROID_NOTICE = ('Android版VRChatを検出しました。PCVR版を導入するには、先にAndroid版のアンインストールが必要です。'
                   '削除するとローカルの設定・データを失う可能性があります。必要なデータは先に保管してください。')
 
@@ -29,24 +31,28 @@ def read_manifest(path):
     return data
 
 
+def steam_libraries(steamapps):
+    """Resolve the recipient's declared libraries; never infer arbitrary paths."""
+    from framectl import at, read_vdf
+    steamapps=Path(steamapps)
+    libraries={steamapps.resolve()}
+    folders=steamapps/'libraryfolders.vdf'
+    if folders.exists():
+        data=at(read_vdf(folders),'libraryfolders')
+        if not isinstance(data,dict):raise ValueError('Invalid Steam library metadata')
+        for entry in data.values():
+            name=at(entry,'path') if isinstance(entry,dict) else None
+            if isinstance(name,str) and Path(name).is_absolute():
+                libraries.add((Path(name)/'steamapps').resolve())
+    return sorted(libraries)
+
+
 def game_edition(steamapps):
     """Read files only. An APK and a Windows executable are never interchangeable."""
     from framectl import at, binary_arch
     steamapps = Path(steamapps)
-    libraries = {steamapps.resolve()}
-    folders = steamapps / 'libraryfolders.vdf'
-    if folders.exists():
-        from framectl import read_vdf
-        try:
-            data = at(read_vdf(folders), 'libraryfolders')
-        except (OSError, ValueError):
-            return {'edition': 'unknown', 'reason': 'library_metadata'}
-        if not isinstance(data, dict):
-            return {'edition': 'unknown', 'reason': 'library_metadata'}
-        for value in data.values():
-            name = at(value, 'path') if isinstance(value, dict) else None
-            if isinstance(name, str) and Path(name).is_absolute():
-                libraries.add((Path(name) / 'steamapps').resolve())
+    try:libraries=steam_libraries(steamapps)
+    except (OSError,ValueError):return {'edition':'unknown','reason':'library_metadata'}
     manifests = [p / 'appmanifest_438100.acf' for p in sorted(libraries)
                  if (p / 'appmanifest_438100.acf').exists()]
     if not manifests:
@@ -115,22 +121,50 @@ def edition_error(info):
             'FrameのSteamでVRChatのファイル整合性とダウンロード完了を確認してください。既存データを変更せず停止しました。')
 
 
-def tool_complete(steamapps, appid):
+def tool_status(steamapps, appid):
     if appid not in TOOLS:
         raise ValueError('Not an installer dependency')
     try:
         from framectl import at
-        info = read_manifest(Path(steamapps) / ('appmanifest_' + str(appid) + '.acf'))
+        libraries=steam_libraries(steamapps)
+        manifests=[p/('appmanifest_'+str(appid)+'.acf') for p in libraries
+                   if (p/('appmanifest_'+str(appid)+'.acf')).is_file()]
+        result={'complete':False,'manifest_count':len(manifests),'reason':'missing'}
+        if not manifests:return result
+        if len(manifests)!=1:return dict(result,reason='multiple_libraries')
+        manifest=manifests[0]
+        info = read_manifest(manifest)
         relative = Path(at(info, 'installdir') or '')
-        if at(info, 'appid') != str(appid) or int(at(info, 'StateFlags') or 0) != 4:
-            return False
+        flags=int(at(info,'StateFlags') or 0)
+        result.update(state_flags=flags,paused=bool(flags&512),active_update=bool(flags&ACTIVE_TOOL_UPDATE_FLAGS))
+        if at(info, 'appid') != str(appid):return dict(result,reason='invalid_manifest')
         if not relative.parts or relative.is_absolute() or '..' in relative.parts:
-            return False
-        target = Path(steamapps) / 'common' / relative
-        target.resolve().relative_to((Path(steamapps) / 'common').resolve())
-        return target.is_dir()
+            return dict(result,reason='invalid_path')
+        target = manifest.parent / 'common' / relative
+        target.resolve().relative_to((manifest.parent / 'common').resolve())
+        result.update(target_present=target.is_dir(),path=str(target))
+        if not target.is_dir():return dict(result,reason='files_missing')
+        if appid==1493710 and not all((target/n).is_file() for n in ['proton','version']):
+            return dict(result,reason='files_missing')
+        # FullyInstalled (4) can coexist with UpdateRequired (2) or AppRunning
+        # (64). These do not mean files are absent. Never reuse active updates,
+        # paused/incomplete downloads, corruption, uninstall or unknown flags.
+        if not flags&4 or flags&~(4|2|64):return dict(result,reason='steam_state')
+        return dict(result,complete=True,reason='installed')
     except (OSError, ValueError):
-        return False
+        return {'complete':False,'reason':'unreadable_metadata','manifest_count':0}
+
+
+def tool_complete(steamapps,appid):
+    return tool_status(steamapps,appid)['complete']
+
+
+def tool_diagnostic(info):
+    """Shareable numeric state, excluding install paths and account fields."""
+    return ('StateFlags='+str(info.get('state_flags','?'))+
+            ' / manifest数='+str(info.get('manifest_count','?'))+
+            ' / 配置='+('あり' if info.get('target_present') else '未確認')+
+            ' / 検査='+str(info.get('reason','unknown')))
 
 
 def wizard(action, appid, rpc=None):
@@ -206,15 +240,22 @@ def ensure_game(steamapps, emit, *, edition='windows', inspect=None, operation=N
 def ensure_tools(steamapps, emit, *, complete=None, operation=None,
                  clock=time.monotonic, sleep=time.sleep, timeout=3600):
     """Resume after the recipient handles a Steam EULA. Never accept one here."""
+    inspect=tool_status if complete is None else None
     complete = complete or tool_complete
     operation = operation or wizard
     for appid, label in TOOLS.items():
         if complete(steamapps, appid):
+            emit('download-tools',label+'は導入済みです。既存の配置を使います。')
             continue
+        if inspect:
+            info=inspect(steamapps,appid)
+            if info['reason'] in ('multiple_libraries','invalid_manifest','invalid_path','unreadable_metadata'):
+                raise RuntimeError(label+'の導入情報を確認できません（'+tool_diagnostic(info)+'）。Steamの配置を確認してください。既存部品は変更しません。')
+            emit('download-tools',label+'の検査: '+tool_diagnostic(info))
         emit('download-tools', label + 'をSteamから取得します。')
         operation('start', appid)
         deadline = clock() + timeout
-        next_notice = 0
+        next_notice = 0;resumed=False;idle_since=None
         while not complete(steamapps, appid):
             if clock() >= deadline:
                 raise RuntimeError(label + 'の導入待ち時間が終了しました。Steamのダウンロード状況を確認してください。')
@@ -224,10 +265,20 @@ def ensure_tools(steamapps, emit, *, complete=None, operation=None,
                 raise RuntimeError(label + 'の導入を中断しました。別のSteam操作やエラーを確認してください。')
             if phase == 'config':
                 operation('continue', appid)
+            info=inspect(steamapps,appid) if inspect else None
+            if phase in ('idle','complete') and not resumed and not (info and (info.get('active_update') or info['complete'])):
+                operation('resume',appid);resumed=True
+            # A completed/idle wizard is not proof that a dependency exists.
+            # Avoid an hour of identical messages when no files were installed.
+            if phase in ('idle','complete') and info and not info.get('active_update'):
+                idle_since=clock() if idle_since is None else idle_since
+                if clock()-idle_since>=120:
+                    raise RuntimeError(label+'の取得が進んでいません（'+tool_diagnostic(info)+'）。FrameのSteamでダウンロードを再開し、完了を確認してください。')
+            else:idle_since=None
             if clock() >= next_notice:
                 message = ('Frameに表示されたSteamの規約・確認画面を確認してください。同意後は自動で続行します。'
                            if phase == 'confirmation' else
-                           label + 'のダウンロード・導入を待っています。PCを閉じず接続を維持してください。')
+                           label + 'のダウンロード・導入を待っています。PCを閉じず接続を維持してください。'+(' '+tool_diagnostic(info) if info else ''))
                 emit('download-tools', message)
                 next_notice = clock() + 20
             sleep(1)

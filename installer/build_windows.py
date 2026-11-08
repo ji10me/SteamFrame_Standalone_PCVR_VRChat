@@ -72,9 +72,15 @@ def main():
  if hash_bytes(a.openssh.read_bytes())!='b67ff8becd203502190ec42ac7787c24c2cd3325ed7700485fe7a1c83d2a7957':raise ValueError('OpenSSH archive does not match the pinned official release')
  if hash_bytes((a.openvr/'openvr.h').read_bytes())!='1e6ed57199896cc1f7c5484e50fa18955e97be15be690beb28d998c877ead7fd':raise ValueError('OpenVR header changed')
  kit={}
- for n in ['frame_setup.py','launch.py','session.py','dependencies.py','platform_setup.py','swap_setup.py','steam_install.js']:kit[n]=(ROOT/'installer'/n).read_bytes()
+ for n in ['frame_setup.py','launch.py','session.py','dependencies.py','platform_setup.py','swap_setup.py','steam_install.js','prebuilt_fex.py']:kit[n]=(ROOT/'installer'/n).read_bytes()
  kit['LICENSE']=(ROOT/'LICENSE').read_bytes();kit['LICENSE.md']=(ROOT/'LICENSE.md').read_bytes();kit['LICENSE.en.md']=(ROOT/'LICENSE.en.md').read_bytes();kit['compatibility.json']=(a.assets/'compatibility.json').read_bytes()
  for n in ['dfr/d3d11.dll','dfr/dxgi.dll','sources/gstreamer-frame-source.tar.xz','sources/wine-mf-source.tar.xz']:kit['payload/'+n]=(a.assets/n).read_bytes()
+ if __package__:from .prebuilt_fex import inspect as inspect_fex
+ else:from prebuilt_fex import inspect as inspect_fex
+ fex=(a.assets/'fex/runtime.tar.xz').read_bytes();record,fex_files=inspect_fex(fex)
+ kit['payload/fex/runtime.tar.xz']=fex
+ for n,data in fex_files.items():
+  if n.startswith('licenses/'):kit['licenses/FEX/'+n[len('licenses/'):]]=data
  original=(a.assets/'video/libgstvideo4linux2.so').read_bytes()
  if hash_bytes(original)!='ded2618848cda4156407823a877804d7b5fc00af079eb807b97db1d34305dba6':raise ValueError('Wrong original H.264 code')
  stripped=a.output/'libgstvideo4linux2.so'
@@ -121,7 +127,7 @@ def main():
   if n.startswith('support/gaze/openvr') or n.startswith(('licenses/','payload/')):continue
   for marker in [b'/Users/',b'/home/steamos/',b'192.168.1.',b'PRIVATE KEY-----',b'github_pat_']:
    if marker in data:raise ValueError('Private development marker in '+n)
- manifest={'format':'frame-easy-dfr-h264-v1','version':'alpha-dfr-h264-swap-20261109-0.3.5','files':{n:hash_bytes(data) for n,data in sorted(kit.items())},
+ manifest={'format':'frame-easy-dfr-h264-v1','version':'alpha-dfr-h264-swap-20261109-0.3.6','files':{n:hash_bytes(data) for n,data in sorted(kit.items())},
            'optional_swap':{'bytes':8*1024**3,'priority':10,'requires_recipient_admin_authentication':True,'persistent':False},
            'contains_game_or_prefix':False,'experimental_upscale_included':False,'third_party_original_licenses_preserved':True}
  kit['MANIFEST.json']=(json.dumps(manifest,indent=2)+'\n').encode()
@@ -134,8 +140,8 @@ def main():
   for resource,name in [(201,'ssh.exe'),(202,'ssh-keygen.exe'),(203,'libcrypto.dll'),(204,'LICENSE.txt'),(205,'NOTICE.txt')]:
    path=a.output/'openssh'/name;put(path,z.read('OpenSSH-Win64/'+name));rc+=str(resource)+' RCDATA "'+str(path.resolve())+'"\n'
  rc+='''1 VERSIONINFO
-FILEVERSION 0,3,5,0
-PRODUCTVERSION 0,3,5,0
+FILEVERSION 0,3,6,0
+PRODUCTVERSION 0,3,6,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0
 FILEOS 0x40004L
@@ -148,7 +154,7 @@ BEGIN
    VALUE "CompanyName", "JITOME"
    VALUE "FileDescription", "Steam Frame PCVR for VRChat alpha setup"
    VALUE "ProductName", "Steam Frame PCVR for VRChat"
-   VALUE "ProductVersion", "0.3.5-alpha"
+   VALUE "ProductVersion", "0.3.6-alpha"
   END
  END
  BLOCK "VarFileInfo"

@@ -21,7 +21,7 @@ import time
 sys.dont_write_bytecode = True
 KIT = Path(__file__).resolve().parent
 sys.path.insert(0, str(KIT / 'support'))
-VERSION = 'alpha-dfr-h264-swap-20261109-0.3.5'
+VERSION = 'alpha-dfr-h264-swap-20261109-0.3.6'
 FEX_COMMIT = '6effd2384085818345ec32e6abb4181c7135a9a7'
 RUNTIME = ('FEX', 'FEXBash', 'FEXGetConfig', 'FEXOfflineCompiler', 'FEXServer', 'FEXServerManager', 'FEXpidof')
 DFR_HASHES = {'d3d11.dll': 'a112b719c417c78abe13de88bd6c9be45aac252a9c153ad432740b0a44298db0',
@@ -176,8 +176,14 @@ def run(command, folder, label, env=None, timeout=3600, cool_build=False):
 
 def paths(home=None):
     home = Path(home or Path.home()); steam = home/'.local/share/Steam/steamapps'
-    return {'home':home, 'base':base(home), 'steam':steam, 'standard':steam/'common/FEX-Emu',
+    result={'home':home, 'base':base(home), 'steam':steam, 'standard':steam/'common/FEX-Emu',
             'proton':steam/'common/Proton - Experimental', 'prefix':steam/'compatdata/438100'}
+    for key,appid in [('standard',3127680),('proton',1493710)]:
+        try:
+            info=dependency_module().tool_status(steam,appid)
+            if info['complete']:result[key]=Path(info['path'])
+        except ImportError:pass
+    return result
 
 def dependency_module():
     if __package__:
@@ -226,6 +232,7 @@ def prepare_dependencies(journal,save,release,p):
     deps=dependency_module()
     deps.require_android_removed(deps.game_edition(p['steam']))
     deps.ensure_tools(p['steam'],emit)
+    p.update(paths(p['home']))
     platform_module().prepare(p['steam'],journal,save,copy_tree,release/'work',emit,deps=deps,active=game_active)
 
 def preflight():
@@ -233,10 +240,17 @@ def preflight():
     if platform.system() != 'Linux' or platform.machine() not in ('aarch64','arm64') or os.geteuid() == 0:
         errors.append('Steam Frameの通常ユーザーで実行してください。')
     if game_active(): errors.append('VRChatを完全に終了してから再実行してください。')
-    for tool in ('python3','clang','clang++','git','cmake','ninja','ld.lld','patchelf','cp'):
+    tools=['python3','clang','clang++','ld.lld','patchelf','cp']
+    if not (KIT/'payload/fex/runtime.tar.xz').is_file():tools+=['git','cmake','ninja']
+    for tool in tools:
         if not shutil.which(tool): errors.append('必要な開発ツールがありません: '+tool)
-    for n,label in [('438100','VRChat（Windows版）'),('1493710','Proton Experimental'),('1826330','Proton EasyAntiCheat Runtime'),('3127680','FEX-Emu'),('4183110','SteamLinuxRuntime 4')]:
-        if not (p['steam']/('appmanifest_'+n+'.acf')).is_file(): errors.append('Steamで先にインストールしてください: '+label)
+    if not (p['steam']/'appmanifest_438100.acf').is_file():errors.append('Steamで先にインストールしてください: VRChat（Windows版）')
+    try:
+        deps=dependency_module()
+        for appid,label in deps.TOOLS.items():
+            info=deps.tool_status(p['steam'],appid)
+            if not info['complete']:errors.append(label+'の導入を確認できません（'+deps.tool_diagnostic(info)+'）。')
+    except ImportError:errors.append('Steam部品の検査コードを読み込めません。')
     try:
         deps=dependency_module();edition=deps.game_edition(p['steam']);error=deps.edition_error(edition)
         if error:errors.append(error)
@@ -253,7 +267,8 @@ def preflight():
                 try:match=sha(directory/n)==h
                 except OSError:match=False
                 if not match:
-                    errors.append('SteamのFEX/Protonが確認済み版と異なります。互換性確認前に上書きしないため停止します。');break
+                    label='FEX-Emu' if group=='standard_fex' else 'Proton Experimental'
+                    errors.append(label+'が確認済み版と異なります（部品='+n+'）。未検証の版へ推測で適用せず停止します。');break
     if shutil.disk_usage(p['home']).free < 12*1024**3: errors.append('専用ProtonとPrefixの作成に空き容量12GiB以上が必要です。')
     try: options_get()
     except Exception: errors.append('Steamを起動し、開発者モードを有効にしてください。Steamのローカル設定APIへ接続できません。')
@@ -291,7 +306,15 @@ def prepare_runtime(release, p):
     for n in ('emulator.json','fex-compat-tool','unshare.py','toolmanifest.vdf'):
         shutil.copy2(standard/n,runtime/n)
     for n in ('usr/lib','usr/share'):copy_tree(standard/n,runtime/n,work,'copy-'+n.replace('/','-'))
-    stage=audited_local_candidate(p['home'])
+    packed=KIT/'payload/fex/runtime.tar.xz'
+    if packed.is_file():
+        if __package__:from . import prebuilt_fex
+        else:import prebuilt_fex
+        emit('prebuilt-fex','同梱のビルド済みFEXを検査・展開します。FEX本体のコンパイルは不要です。')
+        stage=prebuilt_fex.unpack(packed,release/'prebuilt-fex')
+        run([stage/'usr/bin/FEXGetConfig','--version'],work,'prebuilt-fex-version',timeout=30)
+    else:
+        stage=audited_local_candidate(p['home'])
     if stage is None:
         emit('build-fex','初回用のFEXを作成しています。時間がかかる場合があります。')
         env=dict(os.environ,FEX_FRAME_WORK=str(release/'build-fex'),FEX_FRAME_JOBS='1',PYTHONDONTWRITEBYTECODE='1')

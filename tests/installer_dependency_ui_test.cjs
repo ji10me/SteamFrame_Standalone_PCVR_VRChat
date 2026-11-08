@@ -5,7 +5,7 @@ const source = fs.readFileSync(process.argv[2], 'utf8');
 async function main() {
   let info = {eInstallState: 0};
   const calls = [];
-  const context = vm.createContext({SteamClient: {Installs: {
+  const context = vm.createContext({SteamClient: {Downloads: {ResumeAppUpdate:async (id,client)=>{assert.equal(client,'0');calls.push(['resume',id]);}},Installs: {
     GetInstallManagerInfo: async () => info,
     OpenInstallWizard: async (ids,client) => {assert.equal(client,'0');calls.push(['open', [...ids]]);},
     OpenUninstallWizard: async (ids,client,confirmed) => {assert.deepEqual([...ids],[438100]);assert.equal(client,'0');assert.equal(confirmed,true);calls.push(['remove', [...ids]]);},
@@ -46,6 +46,11 @@ async function main() {
   await remove(438100);assert.deepEqual(calls.at(-1),['remove',[438100]]);
   info={eInstallState:8,rgApps:[{nAppID:438100}],currentAppID:438100};before=calls.length;
   await assert.rejects(remove(438100));assert.equal(calls.length,before);
+  const resume = appid => vm.runInContext('(' + source + ')(' + JSON.stringify({action:'resume',appid}) + ')', context);
+  await assert.rejects(resume(1493710));
+  info={eInstallState:0};await resume(1493710);assert.deepEqual(calls.at(-1),['resume',1493710]);
+  info={eInstallState:14,rgApps:[{nAppID:1493710}],currentAppID:1493710};await resume(1493710);
+  await assert.rejects(resume(570));
   console.log('dependency UI guards passed');
 }
 main().catch(error => {console.error(error); process.exitCode = 1;});

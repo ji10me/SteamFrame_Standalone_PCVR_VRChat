@@ -25,10 +25,12 @@
 - **OpenVR**: Valveの公開ヘッダー・元LICENSEを同梱します。Frameの既存native libraryとリンクします。
 - **WindowsアプリのC++ランタイム**: LLVM/LLVM-MinGWの静的ランタイムを使います。
   Apache-2.0 with LLVM ExceptionsとMinGW-w64/winpthreads等の元のCOPYINGをpayloadの`licenses/`へ保持します。
-- **FEX**: 実行バイナリーをこのパッケージには含めません。
-  本人のハッシュ検証済みビルドをFrame内で再利用するか、
-  [固定ソース](https://github.com/StonkGuy/FEX/tree/6effd2384085818345ec32e6abb4181c7135a9a7)から本人のFrameで作成します。
-  上位MITと各依存部品のライセンスが適用されます。
+- **FEX**: 変更を加えていない[固定ソース](https://github.com/StonkGuy/FEX/tree/6effd2384085818345ec32e6abb4181c7135a9a7)からFrame上で作成したARM64 Runtimeを同梱します。
+  FEX本体の長いコンパイルを初回導入から省きます。OSの共有FEXを上書きせず、専用配置へ展開します。
+  上位MIT・FEXCoreと各依存部品のライセンス原文を`licenses/FEX/`と外側の`THIRD_PARTY_LICENSES.txt`に保持します。
+  `PREBUILT.json`に固定コミット・submoduleコミット・各部品のhashを記録します。個人のPrefixや実機ログは含めません。
+  FEXソース全体はEXE内に含めず、上の固定コミットとsubmoduleから取得できます。再ビルド用ラッパーも同梱します。
+  libc・libstdc++などOSの共有ライブラリーは同梱せず、受取人のFrameのものを使います。
 - **Microsoft Win32-OpenSSH**: PC側の通信に使う`ssh.exe`・`ssh-keygen.exe`・`libcrypto.dll`を
   [公式10.4.0.0p1-Preview](https://github.com/PowerShell/Win32-OpenSSH/releases/tag/10.4.0.0p1-Preview)から収録。
   サービスのインストールやシステムのSSH設定変更はしません。

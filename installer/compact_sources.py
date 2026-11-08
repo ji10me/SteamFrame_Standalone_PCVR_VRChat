@@ -111,7 +111,7 @@ def scope(files):
 def write_archive(files, output):
     output = Path(output)
     with output.open('xb') as raw:
-        with lzma.LZMAFile(raw, 'w', preset=6) as compressed:
+        with lzma.LZMAFile(raw, 'w', preset=9 | lzma.PRESET_EXTREME) as compressed:
             with tarfile.open(fileobj=compressed, mode='w|', format=tarfile.USTAR_FORMAT) as tar:
                 for name, data in sorted(files.items()):
                     info = tarfile.TarInfo('wine-mf-source/' + name)
@@ -216,7 +216,7 @@ def gstreamer(archive, output):
     if sha(data) != GSTREAMER_ARCHIVE_SHA256:
         raise ValueError('GStreamer source is not the validated source snapshot')
     original = gzip.decompress(data)
-    compressed = lzma.compress(original, preset=6)
+    compressed = lzma.compress(original, preset=9 | lzma.PRESET_EXTREME)
     with Path(output).open('xb') as f:
         f.write(compressed)
     return {'bytes': len(compressed), 'sha256': sha(compressed), 'uncompressed_sha256': sha(original)}

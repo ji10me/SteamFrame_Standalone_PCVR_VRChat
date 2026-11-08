@@ -13,10 +13,12 @@ if __package__:
     from .frame_setup import verify_kit
     from .sanitize_assets import pe_sections
     from .compact_sources import verify_wine
+    from .prebuilt_fex import inspect as inspect_fex
 else:
     from frame_setup import verify_kit
     from sanitize_assets import pe_sections
     from compact_sources import verify_wine
+    from prebuilt_fex import inspect as inspect_fex
 
 
 def sha(data):return hashlib.sha256(data).hexdigest()
@@ -57,7 +59,7 @@ def verify(directory,openssh=None):
     d=Path(directory);exe=(d/'FrameSetup.exe').read_bytes();payload=(d/'frame-payload.zip').read_bytes()
     r=resources(exe);rcdata={path[1]:data for path,data in r.items() if path[0]==10}
     if rcdata[101]!=payload:raise ValueError('EXE embeds a different payload')
-    if not any('0.3.5-alpha'.encode('utf-16le') in value for path,value in r.items() if path[0]==16):
+    if not any('0.3.6-alpha'.encode('utf-16le') in value for path,value in r.items() if path[0]==16):
         raise ValueError('Version resource is stale')
     z=safe_zip(payload)
     forbidden=['user.reg','system.reg','loginusers.vdf','authorized_keys','known_hosts','installation.json','calibration.json']
@@ -70,6 +72,10 @@ def verify(directory,openssh=None):
     if rcdata[102]!=z.read('LICENSE.md') or rcdata[103]!=z.read('THIRD_PARTY.md'):
         raise ValueError('License resource mismatch')
     wine_source=verify_wine(z.read('payload/sources/wine-mf-source.tar.xz'))
+    fex_record,fex_files=inspect_fex(z.read('payload/fex/runtime.tar.xz'))
+    for name,data in fex_files.items():
+        if name.startswith('licenses/') and z.read('licenses/FEX/'+name[len('licenses/'):])!=data:
+            raise ValueError('FEX dependency license mismatch')
     for name in ['payload/video/libgstvideo4linux2.so','payload/wine/mf.dll']:
         if any(v in z.read(name) for v in [b'/Users/',b'/home/'+b'steamos/',b'192.168.1.']):raise ValueError('Private binary marker')
     if openssh:
@@ -92,6 +98,7 @@ def verify(directory,openssh=None):
     return {'version':manifest['version'],'embedded_files':len(manifest['files']),'payload_matches_exe':True,
             'checksums_and_sources_verified':True,'component_source_files':len(wine_source['files']),
             'distribution_files':3,'under_20_MB':True,'no_personal_runtime_files':True,'native_windows_ui_executed':False,
+            'prebuilt_fex_commit':fex_record['commit'],'fex_compile_required':False,
             'exe_bytes':len(exe),'exe_sha256':sha(exe),
             'zip_bytes':(d/'SteamFrame-PCVR-VRChat-Setup-Windows-alpha.zip').stat().st_size,
             'zip_sha256':sha((d/'SteamFrame-PCVR-VRChat-Setup-Windows-alpha.zip').read_bytes())}

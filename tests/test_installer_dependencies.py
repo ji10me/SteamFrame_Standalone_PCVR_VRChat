@@ -261,6 +261,60 @@ class DownloadTests(unittest.TestCase):
         with self.assertRaises(ValueError): deps.wizard('start', 570, calls.append)
         self.assertEqual(calls, [])
 
+    def test_installed_proton_in_another_library_does_not_open_download_ui(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/'steamapps';root.mkdir();other=Path(tmp)/'other/steamapps';other.mkdir(parents=True)
+            (root/'libraryfolders.vdf').write_text('"libraryfolders" { "1" { "path" '+json.dumps(str(other.parent))+' } }')
+            proton=other/'common/Proton - Experimental';proton.mkdir(parents=True)
+            for n in ['proton','version']:(proton/n).write_text('fixture')
+            (other/'appmanifest_1493710.acf').write_text('"AppState" { "appid" "1493710" "installdir" "Proton - Experimental" "StateFlags" "6" }')
+            self.assertTrue(deps.tool_complete(root,1493710))
+            status=deps.tool_status(root,1493710);self.assertEqual(Path(status['path']),proton.resolve())
+            with patch.object(deps,'TOOLS',{1493710:'Proton Experimental'}):
+                calls=[];deps.ensure_tools(root,lambda *a:None,operation=lambda *a:calls.append(a))
+                self.assertEqual(calls,[])
+
+    def test_incomplete_corrupt_or_updating_tool_is_not_reused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);proton=root/'common/Proton - Experimental';proton.mkdir(parents=True)
+            for n in ['proton','version']:(proton/n).write_text('fixture')
+            for flags in [0,2,32,128,256|4,512|4,1026,4|1048576]:
+                (root/'appmanifest_1493710.acf').write_text('"AppState" { "appid" "1493710" "installdir" "Proton - Experimental" "StateFlags" "'+str(flags)+'" }')
+                self.assertFalse(deps.tool_complete(root,1493710),flags)
+
+    def test_missing_tool_does_not_wait_forever_after_completed_wizard(self):
+        now=[0];calls=[]
+        def operation(action,app):calls.append((action,app));return {'phase':'complete'}
+        with tempfile.TemporaryDirectory() as tmp,patch.object(deps,'TOOLS',{1493710:'Proton Experimental'}):
+            with self.assertRaisesRegex(RuntimeError,'取得が進んでいません'):
+                deps.ensure_tools(tmp,lambda *a:None,operation=operation,clock=lambda:now[0],
+                    sleep=lambda n:now.__setitem__(0,now[0]+n))
+        self.assertEqual(calls.count(('resume',1493710)),1)
+        self.assertLess(now[0],180)
+
+    def test_tool_diagnostics_do_not_expose_install_paths(self):
+        text=deps.tool_diagnostic({'state_flags':516,'manifest_count':1,'target_present':True,
+                                  'reason':'steam_state','path':'/private/recipient/Steam'})
+        self.assertIn('516',text);self.assertNotIn('/private',text)
+
+    def test_completed_wizard_does_not_time_out_an_active_background_download(self):
+        now=[0];calls=[]
+        with tempfile.TemporaryDirectory() as tmp,patch.object(deps,'TOOLS',{1493710:'Proton Experimental'}):
+            root=Path(tmp);target=root/'common/Proton - Experimental';target.mkdir(parents=True)
+            manifest=root/'appmanifest_1493710.acf'
+            def write(flags):manifest.write_text('"AppState" { "appid" "1493710" "installdir" "Proton - Experimental" "StateFlags" "'+str(flags)+'" }')
+            write(1048576)
+            def operation(action,app):
+                calls.append((action,app))
+                if now[0]>=130:
+                    for n in ['proton','version']:(target/n).write_text('fixture')
+                    write(4)
+                return {'phase':'complete'}
+            deps.ensure_tools(root,lambda *a:None,operation=operation,clock=lambda:now[0],
+                              sleep=lambda n:now.__setitem__(0,now[0]+n))
+        self.assertGreater(now[0],120)
+        self.assertNotIn(('resume',1493710),calls)
+
     def test_game_platform_update_waits_for_windows_files_not_only_a_manifest(self):
         calls=[];now=[0];phases=iter(['config','idle','working'])
         def operation(action,app):

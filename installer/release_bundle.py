@@ -16,9 +16,11 @@ def files(exe, kit, ssh_license, ssh_notice):
     header = (
         'Steam Frame PCVR for VRChat — Third-party licenses / 外部部品のライセンス\n\n'
         '各ライセンス原文を以下に収録しています。第三者部品を一括してMITへ変更するものではありません。\n'
-        '修正を含む対応ソース・ビルド手順・説明書はEXE内にあります。\n'
+        'DFR・GStreamer・Wineの対応ソース・ビルド手順・説明書はEXE内にあります。\n'
+        '同梱FEXの固定ソース・依存部品の取得先と再ビルド手順も説明書に記載しています。\n'
         'アプリの「利用許諾・ソース」からZIPを取り出せます。インストール前にも開けます。\n'
-        'Corresponding source and build instructions are embedded in FrameSetup.exe.\n'
+        'DFR, GStreamer and Wine sources and build instructions are embedded in FrameSetup.exe.\n'
+        'Pinned FEX source locations and rebuild instructions are also documented.\n'
         'Open the license/source button before or after installation to extract them.\n\n'
     ).encode()
     notices = [('THIRD_PARTY.md', kit['THIRD_PARTY.md'])]
