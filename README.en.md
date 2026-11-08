@@ -5,6 +5,8 @@
 An unofficial setup tool for running the Windows version of VRChat in VR on Steam Frame itself.
 Install it from a Windows PC; rendering and gameplay run on Frame. A separate rendering PC is not required during play.
 
+This is an unofficial project and is not endorsed by, affiliated with, or sponsored by Valve or VRChat. Steam, Steam Frame, VRChat, and other names and trademarks belong to their respective owners.
+
 **Developed by JITOME** · **Experimental alpha · MIT for original components** · **Current release: 0.3.4-alpha**
 
 [Download](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.4-alpha) · [Detailed installation guide (Japanese)](installer/README.ja.md) · [License](LICENSE.en.md)

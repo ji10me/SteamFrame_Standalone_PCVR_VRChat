@@ -5,6 +5,8 @@
 Steam Frame単体でWindows版VRChatをVR表示するための、非公式セットアップツールです。
 Windows PCから導入し、プレイ中の描画・処理はFrame内で行います。描画用PCへの接続は不要です。
 
+本プロジェクトはValveおよびVRChatの公式製品ではなく、両社による承認・提携・支援を受けたものではありません。Steam、Steam Frame、VRChatなどの名称・商標は、それぞれの権利者に帰属します。
+
 **開発：JITOME** · **アルファ版 · 独自部分はMIT** · **現在の配布版：0.3.4-alpha**
 
 [ダウンロード](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat/releases/tag/v0.3.4-alpha) · [詳しいインストール方法](installer/README.ja.md) · [利用許諾](LICENSE.md)
