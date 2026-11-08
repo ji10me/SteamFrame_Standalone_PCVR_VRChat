@@ -1,0 +1,3 @@
+# Unified-diff context and upstream licenses retain their original whitespace.
+*.patch -whitespace
+patches/**/COPYING -whitespace

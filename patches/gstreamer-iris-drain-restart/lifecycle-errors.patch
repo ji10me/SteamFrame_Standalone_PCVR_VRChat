@@ -1,0 +1,55 @@
+--- a/sys/v4l2/gstv4l2videodec.c
++++ b/sys/v4l2/gstv4l2videodec.c
+@@ -364,7 +364,7 @@
+   GST_ELEMENT_ERROR (self, RESOURCE, SETTINGS,
+       (_("Decoder on device %s has no supported output format"),
+           self->v4l2output->videodev), (NULL));
+-  return GST_FLOW_ERROR;
++  return FALSE;
+ }
+ 
+ static gboolean
+@@ -401,7 +401,7 @@
+     if (!gst_v4l2_decoder_cmd (self->v4l2output, V4L2_DEC_CMD_START, 0)) {
+       GST_ELEMENT_ERROR (self, RESOURCE, FAILED,
+           ("Failed to restart Frame Iris decoder after drain"), (NULL));
+-      return FALSE;
++      goto restart_failed;
+     }
+   }
+ 
+@@ -419,6 +419,15 @@
+   gst_v4l2_buffer_pool_flush (self->v4l2capture);
+ 
+   return TRUE;
++
++restart_failed:
++  /* Do not leave the queue-unlock latch set after a failed restart. Keep
++   * frame_restart_after_drain so a later explicit flush can retry START,
++   * but never flush/STREAMON a decoder whose restart failed. */
++  self->output_flow = GST_FLOW_ERROR;
++  gst_v4l2_object_unlock_stop (self->v4l2output);
++  gst_v4l2_object_unlock_stop (self->v4l2capture);
++  return FALSE;
+ }
+ 
+ static gboolean
+@@ -572,9 +581,16 @@
+ {
+   GstV4l2VideoDec *self = GST_V4L2_VIDEO_DEC (decoder);
+ 
++  GstFlowReturn ret;
++
+   GST_DEBUG_OBJECT (self, "Draining...");
+-  gst_v4l2_video_dec_finish (decoder);
+-  gst_v4l2_video_dec_flush (decoder);
++  ret = gst_v4l2_video_dec_finish (decoder);
++  /* EOS/FLUSHING are normal stop results from the output task while draining.
++   * Negotiation, allocation and other errors must reach the caller. */
++  if (ret != GST_FLOW_OK && ret != GST_FLOW_EOS && ret != GST_FLOW_FLUSHING)
++    return ret;
++  if (!gst_v4l2_video_dec_flush (decoder))
++    return GST_FLOW_ERROR;
+ 
+   return GST_FLOW_OK;
+ }

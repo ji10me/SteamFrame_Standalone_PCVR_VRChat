@@ -1,0 +1,61 @@
+--- a/src/dxvk/dxvk_gaze_map.h
++++ b/src/dxvk/dxvk_gaze_map.h
+@@ -1,4 +1,5 @@
+ #pragma once
++#include "frame_foveation_map.h"
+ 
+ #include <algorithm>
+ #include <array>
+@@ -46,44 +47,14 @@
+   inline void generateGazeMap(const GazeMapRequest &request, GazeMap &result)
+   {
+     result.request = request;
+-    result.valid = true;
+-    const uint32_t width = request.shape[0], height = request.shape[1];
+-    const uint32_t layers = request.shape[2];
+-    const bool sbs = layers == 1u;
+-    const uint32_t tilesX = (width + request.texel[0] - 1u) / request.texel[0];
+-    const uint32_t tilesY = (height + request.texel[1] - 1u) / request.texel[1];
+-    const uint32_t layerStride = (tilesX * tilesY + 3u) & ~3u;
+-    result.data.resize(size_t(layerStride) * layers);
+-    const float eyeW = sbs ? float(width) * 0.5f : float(width);
+-    const float minDim = std::min(eyeW, float(height));
+-    auto radius = [&](float area, float fallback) {
+-      if (area < 0.0f)
+-        return fallback;
+-      const float a = std::clamp(area, 0.0f, 100.0f) * 0.01f;
+-      return a >= 1.0f ? 10.0f : std::sqrt(a * eyeW * float(height) / 3.14159265f) / minDim;
+-    };
+-    const float r1 = radius(request.fullArea, request.r1);
+-    const float r2 = radius(request.midArea, request.r2);
+-    const uint32_t mid = std::min(5u, request.coarse);
+-    for (uint32_t l = 0u; l < layers; l++)
+-    {
+-      for (uint32_t ty = 0u; ty < tilesY; ty++)
+-      {
+-        for (uint32_t tx = 0u; tx < tilesX; tx++)
+-        {
+-          const float px = (float(tx) + 0.5f) * float(request.texel[0]);
+-          const float py = (float(ty) + 0.5f) * float(request.texel[1]);
+-          const uint32_t eye = sbs ? (px < eyeW ? 0u : 1u) : l;
+-          const float lx = sbs ? px - float(eye) * eyeW : px;
+-          const float d = std::hypot(lx - request.fx[eye] * eyeW,
+-              py - request.fy[eye] * float(height)) / minDim;
+-          result.data[size_t(l) * layerStride + size_t(ty) * tilesX + tx]
+-              = d >= r1 ? uint8_t(d >= r2 ? request.coarse : mid) : 0u;
+-        }
+-      }
+-      std::fill(result.data.begin() + size_t(l) * layerStride + tilesX * tilesY,
+-          result.data.begin() + size_t(l + 1u) * layerStride, 0u);
+-    }
++    frame_dfr::Layout layout{request.shape[0], request.shape[1], request.shape[2],
++                             request.texel[0], request.texel[1]};
++    frame_dfr::Focus focus;
++    focus.u = request.fx; focus.v = request.fy;
++    focus.inner_radius = request.r1; focus.outer_radius = request.r2;
++    focus.inner_percent = request.fullArea; focus.outer_percent = request.midArea;
++    focus.peripheral_rate = request.coarse;
++    result.valid = frame_dfr::build_map(layout, focus, result.data);
+   }
+ 
+   struct GazeMapGenerator

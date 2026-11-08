@@ -1,0 +1,12 @@
+# 実機ログ、採取データ、ビルド成果物は文書と分離する
+/local/
+/build/
+/out/
+/output/
+/tmp/
+.DS_Store
+__pycache__/
+*.pyc
+
+# Local development notes are not public source.
+/RESUME.md

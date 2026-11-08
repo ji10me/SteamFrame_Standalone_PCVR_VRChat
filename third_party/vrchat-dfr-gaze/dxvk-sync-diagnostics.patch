@@ -1,0 +1,62 @@
+--- a/src/d3d11/d3d11_interop.cpp
++++ b/src/d3d11/d3d11_interop.cpp
+@@ -1,12 +1,27 @@
+ #include "d3d11_context_imm.h"
+ #include "d3d11_interop.h"
+ #include "d3d11_device.h"
++#include "frame_sync_diagnostics.h"
+ 
+ #include "../dxvk/dxvk_adapter.h"
+ #include "../dxvk/dxvk_device.h"
+ #include "../dxvk/dxvk_instance.h"
+ 
+ namespace dxvk {
++  namespace {
++    frame_sync::Diagnostics& frameSyncDiagnostics() {
++      static frame_sync::Diagnostics value;
++      return value;
++    }
++    struct FrameSyncScope {
++      frame_sync::Diagnostics& diagnostics;
++      uint64_t start = diagnostics.begin();
++      ~FrameSyncScope() { diagnostics.end(frame_sync::Flush, start); }
++    };
++    thread_local const D3D11VkInterop *frameSyncOwner = nullptr;
++    thread_local uint64_t frameSyncHeldStart = 0;
++  }
++
+   
+   D3D11VkInterop::D3D11VkInterop(
+           IDXGIObject*          pContainer,
+@@ -83,6 +98,7 @@
+   
+   
+   void STDMETHODCALLTYPE D3D11VkInterop::FlushRenderingCommands() {
++    FrameSyncScope observation { frameSyncDiagnostics() };
+     // Callers can expect the submission to have happened on the Vulkan queue
+     // by the time this returns, so we need to unconditionally synchronize
+     auto immediateContext = m_device->GetContext();
+@@ -93,12 +109,23 @@
+   
+   
+   void STDMETHODCALLTYPE D3D11VkInterop::LockSubmissionQueue() {
++    auto& observation = frameSyncDiagnostics();
++    uint64_t start = observation.begin();
+     m_device->GetDXVKDevice()->lockSubmission();
++    observation.end(frame_sync::QueueWait, start);
++    frameSyncHeldStart = observation.begin();
++    frameSyncOwner = this;
+   }
+   
+   
+   void STDMETHODCALLTYPE D3D11VkInterop::ReleaseSubmissionQueue() {
++    auto& observation = frameSyncDiagnostics();
++    uint64_t start = frameSyncOwner == this ? frameSyncHeldStart : 0;
++    uint64_t end = start ? observation.timestamp() : 0;
+     m_device->GetDXVKDevice()->unlockSubmission();
++    observation.endAt(frame_sync::QueueHeld, start, end);
++    frameSyncHeldStart = 0;
++    frameSyncOwner = nullptr;
+   }
+   
+   

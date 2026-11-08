@@ -1,0 +1,97 @@
+--- a/sys/v4l2/gstv4l2videodec.c
++++ b/sys/v4l2/gstv4l2videodec.c
+@@ -66,6 +66,8 @@
+     GST_TYPE_VIDEO_DECODER);
+ 
+ static GstFlowReturn gst_v4l2_video_dec_finish (GstVideoDecoder * decoder);
++static gboolean gst_v4l2_decoder_cmd (GstV4l2Object * v4l2object,
++    guint cmd, guint flags);
+ 
+ static void
+ gst_v4l2_video_dec_set_property (GObject * object,
+@@ -187,6 +189,7 @@
+   g_atomic_int_set (&self->active, TRUE);
+   g_atomic_int_set (&self->capture_configuration_change, FALSE);
+   self->output_flow = GST_FLOW_OK;
++  self->frame_restart_after_drain = FALSE;
+ 
+   return TRUE;
+ }
+@@ -206,6 +209,7 @@
+ 
+   GST_VIDEO_DECODER_STREAM_LOCK (decoder);
+   self->output_flow = GST_FLOW_OK;
++  self->frame_restart_after_drain = FALSE;
+   GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
+ 
+   /* Should have been flushed already */
+@@ -298,6 +302,7 @@
+ 
+     gst_v4l2_object_stop (self->v4l2capture);
+     self->output_flow = GST_FLOW_OK;
++    self->frame_restart_after_drain = FALSE;
+   }
+ 
+   ret = gst_v4l2_object_set_format (self->v4l2output, state->caps, &error);
+@@ -345,7 +350,25 @@
+   if (G_UNLIKELY (!g_atomic_int_get (&self->active)))
+     return TRUE;
+ 
++  /* The Frame Iris decoder can remain drained after STREAMOFF/STREAMON.
++   * Resume explicitly before flushing either queue. This is opt-in and only
++   * applies after EOS on the identified Iris decoder, never other devices. */
++  if (self->frame_restart_after_drain &&
++      g_strcmp0 ((const gchar *) self->v4l2output->vcap.card,
++          "iris_decoder") == 0 &&
++      g_strcmp0 ((const gchar *) self->v4l2output->vcap.driver,
++          "iris_driver") == 0 &&
++      g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_RESTART"), "1") == 0) {
++    GST_INFO_OBJECT (self, "Frame Iris: restarting drained decoder before flush");
++    if (!gst_v4l2_decoder_cmd (self->v4l2output, V4L2_DEC_CMD_START, 0)) {
++      GST_ELEMENT_ERROR (self, RESOURCE, FAILED,
++          ("Failed to restart Frame Iris decoder after drain"), (NULL));
++      return FALSE;
++    }
++  }
++
+   self->output_flow = GST_FLOW_OK;
++  self->frame_restart_after_drain = FALSE;
+ 
+   gst_v4l2_object_unlock_stop (self->v4l2output);
+   gst_v4l2_object_unlock_stop (self->v4l2capture);
+@@ -417,6 +440,7 @@
+   GstFlowReturn ret = GST_FLOW_OK;
+   GstBuffer *buffer;
+   GList *pending_frames = NULL;
++  gboolean drained = FALSE;
+ 
+   if (gst_pad_get_task_state (decoder->srcpad) != GST_TASK_STARTED)
+     goto done;
+@@ -444,6 +468,7 @@
+       GST_OBJECT_UNLOCK (task);
+ 
+       ret = GST_FLOW_FLUSHING;
++      drained = TRUE;
+       gst_object_unref (task);
+     }
+   } else {
+@@ -466,6 +491,9 @@
+   gst_v4l2_object_unlock (self->v4l2capture);
+   gst_pad_stop_task (decoder->srcpad);
+   GST_VIDEO_DECODER_STREAM_LOCK (decoder);
++
++  if (drained)
++    self->frame_restart_after_drain = TRUE;
+ 
+   if (ret == GST_FLOW_FLUSHING)
+     ret = self->output_flow;
+--- a/sys/v4l2/gstv4l2videodec.h
++++ b/sys/v4l2/gstv4l2videodec.h
+@@ -62,6 +62,7 @@
+   GstVideoCodecState *input_state;
+   gboolean active;
+   GstFlowReturn output_flow;
++  gboolean frame_restart_after_drain;
+ 
+   /* dynamic resolution change flag */
+   gboolean capture_configuration_change;

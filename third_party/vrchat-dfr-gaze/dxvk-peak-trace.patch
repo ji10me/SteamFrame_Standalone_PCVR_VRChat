@@ -1,0 +1,144 @@
+--- a/src/d3d11/d3d11_interop.cpp
++++ b/src/d3d11/d3d11_interop.cpp
+@@ -1,3 +1,4 @@
++#include "../frame_peak_trace.h"
+ #include "d3d11_context_imm.h"
+ #include "d3d11_interop.h"
+ #include "d3d11_device.h"
+@@ -7,6 +8,7 @@
+ #include "../dxvk/dxvk_instance.h"
+ 
+ namespace dxvk {
++  namespace { thread_local const D3D11VkInterop *peakOwner=nullptr; thread_local uint64_t peakHeld=0; }
+   
+   D3D11VkInterop::D3D11VkInterop(
+           IDXGIObject*          pContainer,
+@@ -83,6 +85,7 @@
+   
+   
+   void STDMETHODCALLTYPE D3D11VkInterop::FlushRenderingCommands() {
++    frame_peak::Scope observe(frame_peak::Flush);
+     // Callers can expect the submission to have happened on the Vulkan queue
+     // by the time this returns, so we need to unconditionally synchronize
+     auto immediateContext = m_device->GetContext();
+@@ -93,12 +96,19 @@
+   
+   
+   void STDMETHODCALLTYPE D3D11VkInterop::LockSubmissionQueue() {
++    auto start=frame_peak::trace().begin();
+     m_device->GetDXVKDevice()->lockSubmission();
++    frame_peak::trace().end(frame_peak::InteropLock,start);
++    peakOwner=this;peakHeld=frame_peak::trace().begin();
+   }
+   
+   
+   void STDMETHODCALLTYPE D3D11VkInterop::ReleaseSubmissionQueue() {
++    auto start=peakOwner==this ? peakHeld : 0;
++    auto end=start ? frame_peak::trace().timestamp() : 0;
+     m_device->GetDXVKDevice()->unlockSubmission();
++    frame_peak::trace().endAt(frame_peak::InteropHeld,start,end);
++    peakOwner=nullptr;peakHeld=0;
+   }
+   
+   
+--- a/src/dxvk/dxvk_cs.cpp
++++ b/src/dxvk/dxvk_cs.cpp
+@@ -1,3 +1,4 @@
++#include "../frame_peak_trace.h"
+ #include "dxvk_cs.h"
+ 
+ namespace dxvk {
+@@ -167,6 +168,7 @@
+     // Avoid locking if we know the sync is a no-op, may
+     // reduce overhead if this is being called frequently
+     if (seq > m_seqOrdered.load()) {
++      frame_peak::Scope observe(frame_peak::CsSync,seq);
+       // We don't need to lock the queue here, if synchronization
+       // happens while another thread is submitting then there is
+       // an inherent race anyway
+--- a/src/dxvk/dxvk_queue.cpp
++++ b/src/dxvk/dxvk_queue.cpp
+@@ -1,3 +1,4 @@
++#include "../frame_peak_trace.h"
+ #include "dxvk_device.h"
+ #include "dxvk_queue.h"
+ 
+@@ -81,11 +82,13 @@
+ 
+ 
+   void DxvkSubmissionQueue::synchronizeSubmission(uint64_t submissionId) {
++    frame_peak::Scope observe(frame_peak::SubmissionSync,submissionId);
+     m_submitTimeline.wait(submissionId);
+   }
+ 
+ 
+   void DxvkSubmissionQueue::synchronize() {
++    frame_peak::Scope observe(frame_peak::SubmissionDrain);
+     std::unique_lock<dxvk::mutex> lock(m_mutex);
+ 
+     m_submitCond.wait(lock, [this] {
+@@ -108,7 +111,9 @@
+ 
+ 
+   void DxvkSubmissionQueue::lockDeviceQueue() {
++    auto start=frame_peak::trace().begin();
+     m_mutexQueue.lock();
++    frame_peak::trace().end(frame_peak::DeviceQueueLock,start);
+ 
+     if (m_callback)
+       m_callback(true);
+@@ -155,7 +160,9 @@
+       VkResult status = m_lastError;
+ 
+       if (status != VK_ERROR_DEVICE_LOST) {
++        auto start=frame_peak::trace().begin();
+         std::lock_guard<dxvk::mutex> lock(m_mutexQueue);
++        frame_peak::trace().end(frame_peak::SubmitThreadLock,start,entry.timeline);
+ 
+         if (m_callback)
+           m_callback(true);
+@@ -168,8 +175,9 @@
+               trackedSubmitId = entry.latency.frameId;
+           }
+ 
+-          status = entry.submit.cmdList->submit(
+-            m_semaphores, m_timelines, trackedSubmitId);
++          { frame_peak::Scope observe(frame_peak::QueueSubmit,entry.timeline);
++            status = entry.submit.cmdList->submit(
++              m_semaphores, m_timelines, trackedSubmitId); }
+           entry.timelines = m_timelines;
+         } else if (entry.present.presenter != nullptr) {
+           if (entry.latency.tracker)
+@@ -268,7 +276,8 @@
+ 
+           // Treat a timeout here as DEVICE_LOST. Sometimes we just don't get
+           // DEVICE_LOST from the driver for some reason.
+-          status = vk->vkWaitSemaphores(vk->device(), &waitInfo, submissionTimeout);
++          { frame_peak::Scope observe(frame_peak::GpuCompletion,entry.timeline);
++            status = vk->vkWaitSemaphores(vk->device(), &waitInfo, submissionTimeout); }
+ 
+           if (status == VK_TIMEOUT) {
+             Logger::err("DxvkSubmissionQueue: Timeout occured, GPU likely hung.");
+--- a/src/d3d11/d3d11_swapchain.cpp
++++ b/src/d3d11/d3d11_swapchain.cpp
+@@ -1,3 +1,4 @@
++#include "../frame_peak_trace.h"
+ #include "d3d11_context_imm.h"
+ #include "d3d11_device.h"
+ #include "d3d11_swapchain.h"
+@@ -257,6 +258,7 @@
+           UINT                      SyncInterval,
+           UINT                      PresentFlags,
+     const DXGI_PRESENT_PARAMETERS*  pPresentParameters) {
++    frame_peak::Scope observe(frame_peak::Present,m_frameId);
+     HRESULT hr = S_OK;
+ 
+     if (m_device->getDeviceStatus() != VK_SUCCESS)
+@@ -711,6 +713,7 @@
+ 
+ 
+   void D3D11SwapChain::SyncFrameLatency() {
++    frame_peak::Scope observe(frame_peak::FrameLatency,m_frameId);
+     // Wait for the sync event so that we respect the maximum frame latency
+     m_frameLatencySignal->wait(m_frameId - GetActualFrameLatency());
+ 

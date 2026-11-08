@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "name": "native-memory-45-observed",
+  "fex_commit": "6effd2384085818345ec32e6abb4181c7135a9a7",
+  "tested_steam_builds": {"3127680": "24136555", "1493710": "26306234"},
+  "DXVK_CONFIG": "dxvk.trackPipelineLifetime = True; dxvk.numCompilerThreads = 2; dxgi.maxDeviceMemory = 2048",
+  "PROTON_USE_XALIA": "0",
+  "DiskCache": "0",
+  "avatar_settings_manual": {
+    "max_shown_avatars_enabled": true,
+    "max_shown_avatars": 5,
+    "distance_culling_enabled": true,
+    "distance_meters": 4.5,
+    "always_show_friends": true,
+    "always_show_explicit": true,
+    "uncompressed_limit_MiB": 100,
+    "download_limit_MiB": 200
+  },
+  "limits": {
+    "observed_instance_population": 45,
+    "all_avatars_fully_shown": false,
+    "fixed_duration_endurance_verified": false,
+    "other_device_runtime_verified": false,
+    "texture_residency_reduction_verified": false
+  }
+}

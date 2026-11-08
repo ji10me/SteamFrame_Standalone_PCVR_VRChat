@@ -1,0 +1,27 @@
+--- a/dlls/mf/sar.c
++++ b/dlls/mf/sar.c
+@@ -795,7 +795,24 @@
+ 
+     if (rate == 0.0 || rate == 1.0)
+     {
++        float previous_rate = renderer->rate;
++
+         renderer->rate = rate;
++        /* Starting the clock at rate zero deliberately leaves the client
++         * stopped. A later rate change is not a clock restart notification,
++         * so resume the client and the initial sample pump here as well. */
++        if (previous_rate == 0.0f && rate != 0.0f && renderer->audio_client &&
++                renderer->clock_state == MFCLOCK_STATE_RUNNING)
++        {
++            hr = IAudioClient_Start(renderer->audio_client);
++            /* Rate zero can also be set after the client was already started. */
++            if (hr == AUDCLNT_E_NOT_STOPPED)
++                hr = S_OK;
++            if (SUCCEEDED(hr))
++                audio_renderer_preroll(renderer);
++            else
++                renderer->rate = previous_rate;
++        }
+     }
+     else
+     {

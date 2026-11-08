@@ -1,0 +1,374 @@
+--- a/sys/v4l2/gstv4l2.c
++++ b/sys/v4l2/gstv4l2.c
+@@ -250,6 +250,8 @@
+ plugin_init (GstPlugin * plugin)
+ {
+   gboolean ret = FALSE;
++  if (g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_TRACE"), "1") == 0)
++    g_printerr ("FrameVideo stage=registry-begin\n");
+   const gchar *paths[] = { "/dev", "/dev/v4l2", NULL };
+   const gchar *names[] = { "video", NULL };
+ 
+@@ -266,6 +268,8 @@
+   ret |= GST_ELEMENT_REGISTER (v4l2sink, plugin);
+   ret |= GST_ELEMENT_REGISTER (v4l2radio, plugin);
+   ret |= GST_DEVICE_PROVIDER_REGISTER (v4l2deviceprovider, plugin);
++  if (g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_TRACE"), "1") == 0)
++    g_printerr ("FrameVideo stage=registry-end ok=%d\n", ret);
+ 
+   return ret;
+ }
+--- a/sys/v4l2/gstv4l2videodec.c
++++ b/sys/v4l2/gstv4l2videodec.c
+@@ -65,7 +65,22 @@
+ G_DEFINE_ABSTRACT_TYPE (GstV4l2VideoDec, gst_v4l2_video_dec,
+     GST_TYPE_VIDEO_DECODER);
+ 
++static gboolean frame_iris_pool_enabled (GstV4l2VideoDec *self)
++{
++  return g_strcmp0 ((const gchar *) self->v4l2output->vcap.card, "iris_decoder") == 0 &&
++      g_strcmp0 ((const gchar *) self->v4l2output->vcap.driver, "iris_driver") == 0 &&
++      g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_POOL"), "1") == 0;
++}
++
++static void frame_trace (const gchar *stage)
++{
++  if (g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_TRACE"), "1") == 0)
++    g_printerr ("FrameVideo stage=%s\n", stage);
++}
++
+ static GstFlowReturn gst_v4l2_video_dec_finish (GstVideoDecoder * decoder);
++static gboolean gst_v4l2_decoder_cmd (GstV4l2Object * v4l2object,
++    guint cmd, guint flags);
+ 
+ static void
+ gst_v4l2_video_dec_set_property (GObject * object,
+@@ -123,12 +138,22 @@
+   GstCaps *codec_caps;
+ 
+   GST_DEBUG_OBJECT (self, "Opening");
++  if (g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_TRACE"), "1") == 0)
++    g_printerr ("FrameVideo stage=decoder-open\n");
+ 
+   if (!gst_v4l2_object_open (self->v4l2output, &error))
+     goto failure;
+ 
+   if (!gst_v4l2_object_open_shared (self->v4l2capture, self->v4l2output))
+     goto failure;
++
++  if (g_strcmp0 ((const gchar *) self->v4l2output->vcap.card, "iris_decoder") == 0 &&
++      g_strcmp0 ((const gchar *) self->v4l2output->vcap.driver, "iris_driver") == 0 &&
++      g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_MMAP"), "1") == 0) {
++    self->v4l2capture->req_mode = GST_V4L2_IO_MMAP;
++    if (g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_TRACE"), "1") == 0)
++      g_printerr ("FrameVideo stage=compat-capture-mmap\n");
++  }
+ 
+   codec_caps = gst_pad_get_pad_template_caps (decoder->sinkpad);
+   self->probed_sinkcaps = gst_v4l2_object_probe_caps (self->v4l2output,
+@@ -187,6 +212,7 @@
+   g_atomic_int_set (&self->active, TRUE);
+   g_atomic_int_set (&self->capture_configuration_change, FALSE);
+   self->output_flow = GST_FLOW_OK;
++  self->frame_restart_after_drain = FALSE;
+ 
+   return TRUE;
+ }
+@@ -206,6 +232,7 @@
+ 
+   GST_VIDEO_DECODER_STREAM_LOCK (decoder);
+   self->output_flow = GST_FLOW_OK;
++  self->frame_restart_after_drain = FALSE;
+   GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
+ 
+   /* Should have been flushed already */
+@@ -261,6 +288,21 @@
+   GstV4l2VideoDec *self = GST_V4L2_VIDEO_DEC (decoder);
+ 
+   GST_DEBUG_OBJECT (self, "Setting format: %" GST_PTR_FORMAT, state->caps);
++  if (g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_TRACE"), "1") == 0) {
++    gint width = 0, height = 0;
++    const GstStructure *st = gst_caps_get_structure (state->caps, 0);
++    gst_structure_get_int (st, "width", &width);
++    gst_structure_get_int (st, "height", &height);
++    g_printerr ("FrameVideo stage=format width=%d height=%d\n", width, height);
++    const gchar *sf = gst_structure_get_string (st, "stream-format");
++    const gchar *alignment = gst_structure_get_string (st, "alignment");
++    gint stream_id = g_strcmp0 (sf, "byte-stream") == 0 ? 1 :
++        g_strcmp0 (sf, "avc") == 0 ? 2 : g_strcmp0 (sf, "avc3") == 0 ? 3 : 0;
++    gint alignment_id = g_strcmp0 (alignment, "au") == 0 ? 1 :
++        g_strcmp0 (alignment, "nal") == 0 ? 2 : 0;
++    g_printerr ("FrameVideo stage=syntax stream=%d alignment=%d codec-data=%d\n",
++        stream_id, alignment_id, state->codec_data != NULL);
++  }
+ 
+   if (self->input_state) {
+     if (compatible_caps (self, state->caps)) {
+@@ -298,6 +340,7 @@
+ 
+     gst_v4l2_object_stop (self->v4l2capture);
+     self->output_flow = GST_FLOW_OK;
++    self->frame_restart_after_drain = FALSE;
+   }
+ 
+   ret = gst_v4l2_object_set_format (self->v4l2output, state->caps, &error);
+@@ -345,7 +388,25 @@
+   if (G_UNLIKELY (!g_atomic_int_get (&self->active)))
+     return TRUE;
+ 
++  /* The Frame Iris decoder can remain drained after STREAMOFF/STREAMON.
++   * Resume explicitly before flushing either queue. This is opt-in and only
++   * applies after EOS on the identified Iris decoder, never other devices. */
++  if (self->frame_restart_after_drain &&
++      g_strcmp0 ((const gchar *) self->v4l2output->vcap.card,
++          "iris_decoder") == 0 &&
++      g_strcmp0 ((const gchar *) self->v4l2output->vcap.driver,
++          "iris_driver") == 0 &&
++      g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_RESTART"), "1") == 0) {
++    GST_INFO_OBJECT (self, "Frame Iris: restarting drained decoder before flush");
++    if (!gst_v4l2_decoder_cmd (self->v4l2output, V4L2_DEC_CMD_START, 0)) {
++      GST_ELEMENT_ERROR (self, RESOURCE, FAILED,
++          ("Failed to restart Frame Iris decoder after drain"), (NULL));
++      return FALSE;
++    }
++  }
++
+   self->output_flow = GST_FLOW_OK;
++  self->frame_restart_after_drain = FALSE;
+ 
+   gst_v4l2_object_unlock_stop (self->v4l2output);
+   gst_v4l2_object_unlock_stop (self->v4l2capture);
+@@ -417,6 +478,7 @@
+   GstFlowReturn ret = GST_FLOW_OK;
+   GstBuffer *buffer;
+   GList *pending_frames = NULL;
++  gboolean drained = FALSE;
+ 
+   if (gst_pad_get_task_state (decoder->srcpad) != GST_TASK_STARTED)
+     goto done;
+@@ -444,6 +506,7 @@
+       GST_OBJECT_UNLOCK (task);
+ 
+       ret = GST_FLOW_FLUSHING;
++      drained = TRUE;
+       gst_object_unref (task);
+     }
+   } else {
+@@ -466,6 +529,9 @@
+   gst_v4l2_object_unlock (self->v4l2capture);
+   gst_pad_stop_task (decoder->srcpad);
+   GST_VIDEO_DECODER_STREAM_LOCK (decoder);
++
++  if (drained)
++    self->frame_restart_after_drain = TRUE;
+ 
+   if (ret == GST_FLOW_FLUSHING)
+     ret = self->output_flow;
+@@ -584,8 +650,15 @@
+      * in the compose rectangle. gst_v4l2_object_acquire_format() checks both
+      * and returns the visible size as with/height and the coded size as
+      * padding. */
++    frame_trace ("capture-acquire-begin");
+     if (!gst_v4l2_object_acquire_format (self->v4l2capture, &info))
+       goto not_negotiated;
++
++    frame_trace ("capture-acquire-done");
++    if (!info.finfo || info.width <= 0 || info.height <= 0) {
++      frame_trace ("invalid-acquired-format");
++      goto not_negotiated;
++    }
+ 
+     /* gst_v4l2_object_acquire_format() does not set fps, copy from sink */
+     info.fps_n = self->v4l2output->info.fps_n;
+@@ -596,7 +669,16 @@
+     self->probed_srccaps = gst_v4l2_object_probe_caps (self->v4l2capture,
+         gst_v4l2_object_get_raw_caps ());
+     /* Create caps from the acquired format, remove the format field */
++    frame_trace ("capture-probe-done");
++    if (!self->probed_srccaps || gst_caps_is_empty (self->probed_srccaps)) {
++      frame_trace ("invalid-probed-caps");
++      goto not_negotiated;
++    }
+     acquired_caps = gst_video_info_to_caps (&info);
++    if (!acquired_caps) {
++      frame_trace ("invalid-acquired-caps");
++      goto not_negotiated;
++    }
+     GST_DEBUG_OBJECT (self, "Acquired caps: %" GST_PTR_FORMAT, acquired_caps);
+     st = gst_caps_get_structure (acquired_caps, 0);
+     gst_structure_remove_fields (st, "format", "colorimetry", "chroma-site",
+@@ -615,8 +697,20 @@
+     GST_DEBUG_OBJECT (self, "Filtered caps: %" GST_PTR_FORMAT, filter);
+     gst_caps_unref (acquired_caps);
+     gst_caps_unref (available_caps);
++    frame_trace ("peer-caps-begin");
+     caps = gst_pad_peer_query_caps (decoder->srcpad, filter);
++    frame_trace ("peer-caps-done");
++    if (caps) {
++      GstCaps *constrained = gst_caps_intersect_full (caps, filter,
++          GST_CAPS_INTERSECT_FIRST);
++      gst_caps_unref (caps);
++      caps = constrained;
++    }
+     gst_caps_unref (filter);
++    if (!caps) {
++      frame_trace ("null-peer-caps");
++      goto not_negotiated;
++    }
+ 
+     GST_DEBUG_OBJECT (self, "Possible decoded caps: %" GST_PTR_FORMAT, caps);
+     if (gst_caps_is_empty (caps)) {
+@@ -630,14 +724,40 @@
+     GST_DEBUG_OBJECT (self, "Chosen decoded caps: %" GST_PTR_FORMAT, caps);
+ 
+     /* Try to set negotiated format, on success replace acquired format */
+-    if (gst_v4l2_object_set_format (self->v4l2capture, caps, &error))
+-      gst_video_info_from_caps (&info, caps);
+-    else
++    frame_trace ("capture-set-format-begin");
++    if (gst_v4l2_object_set_format (self->v4l2capture, caps, &error)) {
++      if (!gst_video_info_from_caps (&info, caps)) {
++        frame_trace ("invalid-negotiated-format");
++        gst_caps_unref (caps);
++        goto not_negotiated;
++      }
++    } else {
++      if (g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_TRACE"), "1") == 0)
++        g_printerr ("FrameVideo stage=capture-set-format-failed code=%d source-line=%d\n",
++            error.error ? error.error->code : -1, error.line);
+       gst_v4l2_clear_error (&error);
++      if (frame_iris_pool_enabled (self) &&
++          !gst_v4l2_object_acquire_format (self->v4l2capture, &info)) {
++        frame_trace ("capture-fallback-reacquire-failed");
++        gst_caps_unref (caps);
++        goto not_negotiated;
++      }
++    }
++    frame_trace ("capture-set-format-done");
+     gst_caps_unref (caps);
+ 
++    if (!info.finfo || info.width <= 0 || info.height <= 0) {
++      frame_trace ("invalid-output-format");
++      goto not_negotiated;
++    }
++    frame_trace ("output-state-begin");
+     output_state = gst_video_decoder_set_output_state (decoder,
+         info.finfo->format, info.width, info.height, self->input_state);
++    if (!output_state) {
++      frame_trace ("null-output-state");
++      goto not_negotiated;
++    }
++    frame_trace ("output-state-done");
+ 
+     /* Copy the rest of the information, there might be more in the future */
+     output_state->info.interlace_mode = info.interlace_mode;
+@@ -645,6 +765,24 @@
+     gst_video_codec_state_unref (output_state);
+ 
+     cpool = gst_v4l2_object_get_buffer_pool (self->v4l2capture);
++    if (!cpool && frame_iris_pool_enabled (self)) {
++      GstCaps *actual_caps = gst_video_info_to_caps (&info);
++      gboolean ready = FALSE;
++      frame_trace ("capture-pool-create-from-acquired");
++      if (actual_caps) {
++        ready = gst_v4l2_object_setup_pool (self->v4l2capture, actual_caps);
++        gst_caps_unref (actual_caps);
++      }
++      if (ready)
++        cpool = gst_v4l2_object_get_buffer_pool (self->v4l2capture);
++    }
++    if (!cpool || !GST_IS_V4L2_BUFFER_POOL (cpool)) {
++      frame_trace (cpool ? "capture-pool-wrong-type" : "capture-pool-null");
++      frame_trace ("invalid-capture-pool");
++      if (cpool) gst_object_unref (cpool);
++      goto activate_failed;
++    }
++    frame_trace ("capture-pool-valid");
+     gst_v4l2_buffer_pool_enable_resolution_change (GST_V4L2_BUFFER_POOL
+         (cpool));
+ 
+@@ -692,7 +830,9 @@
+   GST_VIDEO_DECODER_STREAM_LOCK (decoder);
+   if (g_atomic_int_get (&self->capture_configuration_change)) {
+     gst_v4l2_object_stop (self->v4l2capture);
++    frame_trace ("capture-setup-begin");
+     ret = gst_v4l2_video_dec_setup_capture (decoder);
++    frame_trace ("capture-setup-done");
+     if (ret != GST_FLOW_OK) {
+       GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
+ 
+@@ -760,6 +900,13 @@
+ 
+   if (ret != GST_FLOW_OK)
+     goto beach;
++
++  static gint trace_output_budget = 32;
++  if (g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_TRACE"), "1") == 0 &&
++      g_atomic_int_get (&trace_output_budget) > 0 &&
++      g_atomic_int_add (&trace_output_budget, -1) > 0)
++    g_printerr ("FrameVideo stage=output capture-mode=%d buffers=%u\n",
++        self->v4l2capture->mode, gst_buffer_n_memory (buffer));
+ 
+   if (GST_BUFFER_TIMESTAMP (buffer) % GST_SECOND != 0)
+     GST_ERROR_OBJECT (decoder,
+@@ -851,6 +998,10 @@
+   GstTaskState task_state;
+ 
+   GST_DEBUG_OBJECT (self, "Handling frame %d", frame->system_frame_number);
++  if (!frame->system_frame_number &&
++      g_strcmp0 (g_getenv ("FRAME_V4L2_IRIS_TRACE"), "1") == 0)
++    g_printerr ("FrameVideo stage=input-first output-mode=%d capture-request=%d\n",
++        self->v4l2output->mode, self->v4l2capture->req_mode);
+ 
+   if (G_UNLIKELY (!g_atomic_int_get (&self->active)))
+     goto flushing;
+@@ -864,11 +1015,18 @@
+   }
+ 
+   if (!g_atomic_int_get (&self->capture_configuration_change)) {
++    frame_trace ("capture-setup-begin");
+     ret = gst_v4l2_video_dec_setup_capture (decoder);
++    frame_trace ("capture-setup-done");
+     if (ret != GST_FLOW_OK) {
+       GST_ERROR_OBJECT (decoder, "setup capture fail\n");
+       goto not_negotiated;
+     }
++  }
++
++  if (!pool) {
++    frame_trace ("null-input-pool");
++    goto activate_failed;
+   }
+ 
+   if (G_UNLIKELY (!gst_buffer_pool_is_active (pool))) {
+--- a/sys/v4l2/gstv4l2videodec.h
++++ b/sys/v4l2/gstv4l2videodec.h
+@@ -62,6 +62,7 @@
+   GstVideoCodecState *input_state;
+   gboolean active;
+   GstFlowReturn output_flow;
++  gboolean frame_restart_after_drain;
+ 
+   /* dynamic resolution change flag */
+   gboolean capture_configuration_change;
+--- a/sys/v4l2/gstv4l2object.c
++++ b/sys/v4l2/gstv4l2object.c
+@@ -3124,7 +3124,7 @@
+   return ret;
+ }
+ 
+-static gboolean
++gboolean
+ gst_v4l2_object_setup_pool (GstV4l2Object * v4l2object, GstCaps * caps)
+ {
+   GstV4l2IOMode mode;
+--- a/sys/v4l2/gstv4l2object.h
++++ b/sys/v4l2/gstv4l2object.h
+@@ -312,6 +312,7 @@
+ gboolean     gst_v4l2_object_propose_allocation (GstV4l2Object * obj, GstQuery * query);
+ 
+ GstBufferPool * gst_v4l2_object_get_buffer_pool (GstV4l2Object * v4l2object);
++gboolean gst_v4l2_object_setup_pool (GstV4l2Object * v4l2object, GstCaps * caps);
+ 
+ GstStructure * gst_v4l2_object_v4l2fourcc_to_structure (guint32 fourcc);
+ 

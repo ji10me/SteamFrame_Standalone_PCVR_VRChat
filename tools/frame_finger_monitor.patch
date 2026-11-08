@@ -1,0 +1,14 @@
+--- a/runtime.py
++++ b/runtime.py
+@@ -43,9 +43,2 @@
+-    found = []
+-    for p in Path('/proc').iterdir():
+-        if p.name.isdigit():
+-            try:
+-                if (p/'exe').resolve(strict=True) == NATIVE:
+-                    found.append(int(p.name))
+-            except OSError:
+-                pass
+-    return found[0] if len(found) == 1 else None
++    from frame_process_discovery import unique_executable_pid
++    return unique_executable_pid(NATIVE)

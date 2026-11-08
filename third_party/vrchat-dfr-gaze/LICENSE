@@ -1,0 +1,33 @@
+This repository contains integration scripts, configuration, documentation,
+and patches for third-party projects.
+
+- Scripts, configuration and documentation written for this repository: MIT
+- Patches to DXVK (https://github.com/doitsujin/dxvk): zlib/libpng license,
+  the same as DXVK. Binaries built from these patches are modified versions
+  of DXVK, not the original.
+- Patches to WiVRn (https://github.com/WiVRn/WiVRn): GPL-3.0-or-later, the
+  same as WiVRn.
+
+This repository does not relicense the upstream projects.
+
+The MIT License (MIT)
+
+Copyright (c) 2026 poprox24
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
