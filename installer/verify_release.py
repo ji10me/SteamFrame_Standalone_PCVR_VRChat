@@ -59,7 +59,7 @@ def verify(directory,openssh=None):
     d=Path(directory);exe=(d/'FrameSetup.exe').read_bytes();payload=(d/'frame-payload.zip').read_bytes()
     r=resources(exe);rcdata={path[1]:data for path,data in r.items() if path[0]==10}
     if rcdata[101]!=payload:raise ValueError('EXE embeds a different payload')
-    if not any('0.3.6-alpha'.encode('utf-16le') in value for path,value in r.items() if path[0]==16):
+    if not any('0.3.7-alpha'.encode('utf-16le') in value for path,value in r.items() if path[0]==16):
         raise ValueError('Version resource is stale')
     z=safe_zip(payload)
     forbidden=['user.reg','system.reg','loginusers.vdf','authorized_keys','known_hosts','installation.json','calibration.json']

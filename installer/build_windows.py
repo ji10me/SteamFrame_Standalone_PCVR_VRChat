@@ -127,7 +127,7 @@ def main():
   if n.startswith('support/gaze/openvr') or n.startswith(('licenses/','payload/')):continue
   for marker in [b'/Users/',b'/home/steamos/',b'192.168.1.',b'PRIVATE KEY-----',b'github_pat_']:
    if marker in data:raise ValueError('Private development marker in '+n)
- manifest={'format':'frame-easy-dfr-h264-v1','version':'alpha-dfr-h264-swap-20261109-0.3.6','files':{n:hash_bytes(data) for n,data in sorted(kit.items())},
+ manifest={'format':'frame-easy-dfr-h264-v1','version':'alpha-dfr-h264-swap-20261111-0.3.7','files':{n:hash_bytes(data) for n,data in sorted(kit.items())},
            'optional_swap':{'bytes':8*1024**3,'priority':10,'requires_recipient_admin_authentication':True,'persistent':False},
            'contains_game_or_prefix':False,'experimental_upscale_included':False,'third_party_original_licenses_preserved':True}
  kit['MANIFEST.json']=(json.dumps(manifest,indent=2)+'\n').encode()
@@ -140,8 +140,8 @@ def main():
   for resource,name in [(201,'ssh.exe'),(202,'ssh-keygen.exe'),(203,'libcrypto.dll'),(204,'LICENSE.txt'),(205,'NOTICE.txt')]:
    path=a.output/'openssh'/name;put(path,z.read('OpenSSH-Win64/'+name));rc+=str(resource)+' RCDATA "'+str(path.resolve())+'"\n'
  rc+='''1 VERSIONINFO
-FILEVERSION 0,3,6,0
-PRODUCTVERSION 0,3,6,0
+FILEVERSION 0,3,7,0
+PRODUCTVERSION 0,3,7,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0
 FILEOS 0x40004L
@@ -154,7 +154,7 @@ BEGIN
    VALUE "CompanyName", "JITOME"
    VALUE "FileDescription", "Steam Frame PCVR for VRChat alpha setup"
    VALUE "ProductName", "Steam Frame PCVR for VRChat"
-   VALUE "ProductVersion", "0.3.6-alpha"
+   VALUE "ProductVersion", "0.3.7-alpha"
   END
  END
  BLOCK "VarFileInfo"

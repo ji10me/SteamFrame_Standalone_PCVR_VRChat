@@ -155,7 +155,7 @@ LRESULT CALLBACK procedure(HWND w,UINT message,WPARAM a,LPARAM b){
  switch(message){
  case WM_CREATE:{auto h=reinterpret_cast<LPCREATESTRUCTW>(b)->hInstance;HFONT font=CreateFontW(-17,0,0,0,FW_NORMAL,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");
   auto control=[&](const wchar_t* type,const wchar_t* text,DWORD style,int x,int y,int width,int height,int id){HWND v=CreateWindowExW(type==std::wstring(L"EDIT")?WS_EX_CLIENTEDGE:0,type,text,WS_CHILD|WS_VISIBLE|style,x,y,width,height,w,reinterpret_cast<HMENU>(INT_PTR(id)),h,nullptr);SendMessageW(v,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);return v;};
-  control(L"STATIC",L"Steam Frame PCVR for VRChat 0.3.6（アルファ）",0,24,20,610,28,0);
+  control(L"STATIC",L"Steam Frame PCVR for VRChat 0.3.7（アルファ）",0,24,20,610,28,0);
   control(L"STATIC",L"by JITOME ／ DFR + H.264・音声再開修正 + 補助スワップ",0,24,52,610,25,0);
   instructionBox=control(L"STATIC",L"同じネットワークに接続したFrameで、開発者モードを有効にしてください。",0,24,88,610,43,0);
   control(L"STATIC",L"Frame名 / IP",0,24,139,130,25,0);hostBox=control(L"EDIT",L"frame.local",ES_AUTOHSCROLL|WS_TABSTOP,155,135,475,28,10);

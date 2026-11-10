@@ -1,7 +1,7 @@
-# Steam Frame PCVR for VRChat 0.3.6（Windows・アルファ版）
+# Steam Frame PCVR for VRChat 0.3.7（Windows・アルファ版）
 
 リポジトリ: [SteamFrame_Standalone_PCVR_VRChat](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat)。
-0.3.6はビルド済みFEXを同梱し、導入済みProtonの検出とダウンロード待ちを改善した版です。DFR・動画・音声・補助スワップの実行構成は従来と同じです。
+0.3.7は、Steamで更新された新しいProton Experimentalでも警告を出して導入を続けられるようにした版です。0.3.6からビルド済みFEXを同梱しています。DFR・動画・音声・補助スワップの実行構成は従来と同じです。
 
 Windowsのアプリから、DFR・H.264動画デコード・MF音声再開修正と、任意の8GiB補助スワップを導入します。
 今回見送った、重い等倍画像補正は含みません。

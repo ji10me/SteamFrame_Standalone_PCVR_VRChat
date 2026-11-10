@@ -12,7 +12,7 @@ body:
     id: version
     attributes:
       label: Installer version / インストーラー版
-      placeholder: 0.3.6-alpha
+      placeholder: 0.3.7-alpha
     validations:
       required: true
   - type: dropdown

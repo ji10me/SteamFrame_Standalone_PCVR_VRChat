@@ -37,6 +37,7 @@ def preflight(profile, home=None, system_root=Path('/'), proc_root=Path('/proc')
     home = Path(home or Path.home())
     steamapps = home / '.local/share/Steam/steamapps'
     errors = []
+    warnings = []
     if platform.system() != 'Linux' or platform.machine() not in ('aarch64', 'arm64'):
         errors.append('Run on the ARM64 Linux Frame, not a Mac or another PC.')
     if hasattr(os, 'geteuid') and os.geteuid() == 0:
@@ -63,7 +64,9 @@ def preflight(profile, home=None, system_root=Path('/'), proc_root=Path('/proc')
                 raise ValueError('Install directory is missing')
             expected = profile['tested_steam_builds'].get(appid)
             if expected and at(state, 'buildid') != expected:
-                errors.append('Untested Steam build for ' + label + '; review compatibility before installing.')
+                message = 'Untested Steam build for ' + label + '; review compatibility before installing.'
+                # Proton Experimental updates often; its required DXVK keys are checked below.
+                (warnings if appid == '1493710' else errors).append(message)
             # StateFlags bit 4 denotes installed; downloading/updating states need review.
             if at(state, 'StateFlags') != '4':
                 errors.append('Steam installation is not complete: ' + label)
@@ -105,7 +108,7 @@ def preflight(profile, home=None, system_root=Path('/'), proc_root=Path('/proc')
         errors.append('An existing project Prefix is present; preserve it and review before reinstalling.')
     if shutil.disk_usage(home).free < 12 * 1024 ** 3:
         errors.append('At least 12 GiB free space is required; large Prefixes may need more.')
-    return {'ready': not errors, 'errors': errors, 'no_changes': True}
+    return {'ready': not errors, 'errors': errors, 'warnings': warnings, 'no_changes': True}
 
 
 def verify_candidate(candidate, home):

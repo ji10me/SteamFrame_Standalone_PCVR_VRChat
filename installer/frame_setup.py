@@ -21,7 +21,7 @@ import time
 sys.dont_write_bytecode = True
 KIT = Path(__file__).resolve().parent
 sys.path.insert(0, str(KIT / 'support'))
-VERSION = 'alpha-dfr-h264-swap-20261109-0.3.6'
+VERSION = 'alpha-dfr-h264-swap-20261111-0.3.7'
 FEX_COMMIT = '6effd2384085818345ec32e6abb4181c7135a9a7'
 RUNTIME = ('FEX', 'FEXBash', 'FEXGetConfig', 'FEXOfflineCompiler', 'FEXServer', 'FEXServerManager', 'FEXpidof')
 DFR_HASHES = {'d3d11.dll': 'a112b719c417c78abe13de88bd6c9be45aac252a9c153ad432740b0a44298db0',
@@ -235,8 +235,11 @@ def prepare_dependencies(journal,save,release,p):
     p.update(paths(p['home']))
     platform_module().prepare(p['steam'],journal,save,copy_tree,release/'work',emit,deps=deps,active=game_active)
 
+PROTON_REPLACED=('proton','files/lib/wine/dxvk/x86_64-windows/d3d11.dll','files/lib/wine/dxvk/x86_64-windows/dxgi.dll',
+                 'files/lib/wine/x86_64-windows/mf.dll')
+
 def preflight():
-    p = paths(); errors = []
+    p = paths(); errors = []; warnings = []
     if platform.system() != 'Linux' or platform.machine() not in ('aarch64','arm64') or os.geteuid() == 0:
         errors.append('Steam Frameの通常ユーザーで実行してください。')
     if game_active(): errors.append('VRChatを完全に終了してから再実行してください。')
@@ -262,17 +265,25 @@ def preflight():
     if not Path('/usr/share/guestos/fex-mesa/usr/lib/libvulkan.so.1').exists(): errors.append('Frameのx86ゲスト環境がありません。')
     if (KIT/'compatibility.json').is_file():
         tested=json.loads((KIT/'compatibility.json').read_text())
-        for group,directory in [('standard_fex',p['standard']),('standard_proton',p['proton'])]:
-            for n,h in tested[group].items():
-                try:match=sha(directory/n)==h
-                except OSError:match=False
-                if not match:
-                    label='FEX-Emu' if group=='standard_fex' else 'Proton Experimental'
-                    errors.append(label+'が確認済み版と異なります（部品='+n+'）。未検証の版へ推測で適用せず停止します。');break
+        for n,h in tested['standard_fex'].items():
+            try:match=sha(p['standard']/n)==h
+            except OSError:match=False
+            if not match:
+                errors.append('FEX-Emuが確認済み版と異なります（部品='+n+'）。未検証の版へ推測で適用せず停止します。');break
+        # Proton Experimental updates frequently through Steam. The installer only
+        # copies it and replaces a few self-contained PE modules, so a newer build
+        # is accepted with a warning while the replaced files must still exist.
+        for n,h in tested.get('standard_proton',{}).items():
+            try:match=sha(p['proton']/n)==h
+            except OSError:match=False
+            if not match:
+                warnings.append('Proton Experimentalが確認済み版と異なります（部品='+n+'）。Steam更新による新しい版として続行しますが、動作は未検証です。');break
+    for n in PROTON_REPLACED:
+        if not (p['proton']/n).is_file():errors.append('Proton Experimentalの構成を確認できません: '+n)
     if shutil.disk_usage(p['home']).free < 12*1024**3: errors.append('専用ProtonとPrefixの作成に空き容量12GiB以上が必要です。')
     try: options_get()
     except Exception: errors.append('Steamを起動し、開発者モードを有効にしてください。Steamのローカル設定APIへ接続できません。')
-    return {'ready':not errors,'errors':errors,'read_only':True}
+    return {'ready':not errors,'errors':errors,'warnings':warnings,'read_only':True}
 
 def copy_tree(source, target, work, label):
     if target.exists() or target.is_symlink(): raise RuntimeError('新しい専用配置が必要です。')
@@ -496,6 +507,7 @@ def install(accept=False, uninstall_android=False):
         prepare_dependencies(journal,lambda:atomic(root/'installation.json',journal),release,p)
         check=preflight()
         if not check['ready']:raise RuntimeError('\n'.join(check['errors']))
+        for warning in check.get('warnings',[]):emit('warning',warning)
         emit('prepare','専用の実行環境を作成しています。既存のSteam部品は上書きしません。')
         runtime=prepare_runtime(release,p);prefix=prepare_prefix(release,runtime,p);proton=prepare_proton(release,p);prepare_bridge(release)
         rebase_prefix_links(prefix,proton,p)

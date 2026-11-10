@@ -210,7 +210,7 @@ RPO/FDM/UBO変換は使用しません。VRAMの報告値は実際のメモリ�
 | `Install in the default Steam library` | 必要なソフトのインストール完了と、標準ライブラリへの配置を確認します。 |
 | `Run your own VRChat once` | 本人のSteamから初回起動して、完全に終了します。本人のPrefix/EAC初期化が必要です。 |
 | `Close VRChat completely` | VRChatとその起動処理が終わるまで待ちます。 |
-| `Untested Steam build` | この版で未確認のFEX/Protonです。キットの対応確認が必要です。 |
+| `Untested Steam build` | この版で未確認のFEX/Protonです。FEXはerrorsに出て停止します。Proton Experimentalはwarningsに出るだけで、必須のDXVK設定キーが確認できれば続行します。 |
 | `An existing project Prefix is present` | 既存環境の上書きを防いでいます。再導入のためにPrefixを消さず、既存構成を確認します。 |
 | `Kit manifest/hash mismatch` / `Unexpected files in kit` | 新しいフォルダーへ元のキットを展開し直します。展開内容へファイルを追加しないでください。 |
 | `failed; private local log:` | その後に表示されたローカルログを本人が確認します。試験に失敗しているため、Steamへ起動オプションを設定しません。 |

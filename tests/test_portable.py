@@ -193,7 +193,7 @@ class RecipientTest(RecipientFixture):
                 patch.object(installer.shutil, 'disk_usage') as space:
             space.return_value.free = 20 * 1024 ** 3
             check = lambda: installer.preflight(self.profile, self.home, self.system, self.proc)
-            self.assertEqual(check(), {'ready': True, 'errors': [], 'no_changes': True})
+            self.assertEqual(check(), {'ready': True, 'errors': [], 'warnings': [], 'no_changes': True})
             self.assertFalse(self.base.exists())
             self.put(self.proc / '123/environ', 'SteamAppId=438100\0')
             self.assertIn('live prefixes', ' '.join(check()['errors']))
@@ -202,6 +202,11 @@ class RecipientTest(RecipientFixture):
             self.assertIn('existing project Prefix', ' '.join(check()['errors']))
             self.put(self.steamapps / 'appmanifest_1493710.acf',
                      '"AppState" { "installdir" "Proton - Experimental" "buildid" "changed" "StateFlags" "4" }')
+            result = check()
+            self.assertNotIn('Untested Steam build', ' '.join(result['errors']))
+            self.assertIn('Untested Steam build', ' '.join(result['warnings']))
+            self.put(self.steamapps / 'appmanifest_3127680.acf',
+                     '"AppState" { "installdir" "FEX-Emu" "buildid" "changed" "StateFlags" "4" }')
             self.assertIn('Untested Steam build', ' '.join(check()['errors']))
 
     def test_profile_private_only_and_hashes_refreshed(self):
