@@ -56,7 +56,7 @@ VRChatの不具合報告（[Fatal Error in GC (SuspendThread Loop failed)](https
 | Proton 26491492・ntsync（Protonの既定） | 2回中1回停止（ワールド入室時） |
 | Proton 26491492・fsync | 4回中3回停止（2段階認証の直後、ワールド入室時） |
 | Proton bleeding-edge 26577837・fsync | 1回中1回停止（2段階認証の直後、GCダイアログを確認） |
-| Proton 26491492・サーバー側同期（fsync・esync・ntsyncを無効） | 4回すべて成功（2段階認証ありを含む） |
+| Proton 26491492・サーバー側同期（fsync・esync・ntsyncを無効） | 5回すべて成功（2段階認証あり2回を含む。最後の1回は配布版と同じビルド） |
 
 - Steam標準のFEX・Protonでは、EAC経由の起動（`start_protected_game.exe`）から進まず、比較できませんでした。
 - VRの外で、同じ一時停止の処理を繰り返す試験用プログラムを専用FEX・Proton上で実行しました。対象は、計算・Sleep・イベント・パイプ・ソケット・条件変数・Vulkanのネイティブ待ち・作成直後と終了途中のスレッドです。合計約16万回、`GetThreadContext`は一度も失敗しませんでした。
@@ -79,7 +79,7 @@ VRChatの起動時に`PROTON_NO_FSYNC=1`・`PROTON_NO_ESYNC=1`・`PROTON_NO_NTSY
 
 **Installer version check.** Proton Experimental auto-updated to build 26491492 on 2026-11-10, and the exact hash check stopped installation. The tested build is now 26491492. A newer, differing Proton build only produces a warning, as long as the files replaced in the private copy exist. FEX-Emu checks remain strict.
 
-**Freeze at login or world entry.** VRChat showed Unity's "Fatal error in GC: SuspendThread loop failed" dialog while holding a lock, so every other thread waited. The dialog is invisible in VR, so the game appeared to freeze. VRChat has acknowledged this bug, and it also occurs on native Windows. On the development Frame, fsync and ntsync froze in 4 of 6 launches. Wineserver-side synchronization (`PROTON_NO_FSYNC=1`, `PROTON_NO_ESYNC=1`, `PROTON_NO_NTSYNC=1`) passed all 4 launches, including one with 2FA. VRChat is now launched with these variables. The sample is small, and performance in crowded instances is not yet measured.
+**Freeze at login or world entry.** VRChat showed Unity's "Fatal error in GC: SuspendThread loop failed" dialog while holding a lock, so every other thread waited. The dialog is invisible in VR, so the game appeared to freeze. VRChat has acknowledged this bug, and it also occurs on native Windows. On the development Frame, fsync and ntsync froze in 4 of 6 launches. Wineserver-side synchronization (`PROTON_NO_FSYNC=1`, `PROTON_NO_ESYNC=1`, `PROTON_NO_NTSYNC=1`) passed all 5 launches, including two with 2FA and one with the released build. VRChat is now launched with these variables. The sample is small, and performance in crowded instances is not yet measured.
 
 ## 配布物の検査
 
