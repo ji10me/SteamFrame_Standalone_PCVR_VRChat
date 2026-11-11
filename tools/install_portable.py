@@ -160,7 +160,9 @@ def apply_profile(candidate, profile, home=None):
     if any(item.get('Config', {}).get('DiskCache') != '1' for item in (template, config)):
         raise RuntimeError('Unexpected source DiskCache state')
     template['Config']['DiskCache'] = config['Config']['DiskCache'] = profile['DiskCache']
-    env.update(DXVK_CONFIG=profile['DXVK_CONFIG'], PROTON_USE_XALIA=profile['PROTON_USE_XALIA'])
+    # Wineserver-side sync avoided VRChat's "Fatal error in GC" freeze on Proton 11 under FEX.
+    env.update(DXVK_CONFIG=profile['DXVK_CONFIG'], PROTON_USE_XALIA=profile['PROTON_USE_XALIA'],
+               **{name: profile.get(name, '1') for name in ('PROTON_NO_FSYNC', 'PROTON_NO_ESYNC', 'PROTON_NO_NTSYNC')})
     for path, content in ((template_path, template), (config_path, config), (manifest_path, manifest)):
         path.write_text(json.dumps(content, indent=2) + '\n')
     for name in ('emulator.json', 'ConfigTemplate.json'):

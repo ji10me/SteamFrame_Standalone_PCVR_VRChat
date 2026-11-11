@@ -77,6 +77,7 @@ class LaunchTests(unittest.TestCase):
   result=launch.command(self.args,env,self.root,self.config)
   self.assertEqual(result,[self.args[0],self.config['runtime']+'/fex-compat-tool',self.config['proton']+'/proton',*self.args[3:]])
   self.assertEqual(env['STEAM_COMPAT_DATA_PATH'],str(self.prefix));self.assertIn('other',env['STEAM_COMPAT_TOOL_PATHS'])
+  for name in ('PROTON_NO_FSYNC','PROTON_NO_ESYNC','PROTON_NO_NTSYNC'):self.assertEqual(env[name],'1')
  def test_other_app_is_not_redirected(self):
   with self.assertRaises(RuntimeError):launch.command(self.args,{'SteamAppId':'1'},self.root,self.config)
  def test_duplicate_steam_boundary_is_not_nested(self):

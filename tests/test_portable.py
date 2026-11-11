@@ -217,6 +217,8 @@ class RecipientTest(RecipientFixture):
         manifest = json.loads((candidate / 'emulator.json').read_text())['emulator_v0']['container_environment']
         self.assertEqual(manifest['DXVK_CONFIG'], self.profile['DXVK_CONFIG'])
         self.assertEqual(manifest['PROTON_USE_XALIA'], '0')
+        for name in ('PROTON_NO_FSYNC', 'PROTON_NO_ESYNC', 'PROTON_NO_NTSYNC'):
+            self.assertEqual(manifest[name], '1')
         self.assertEqual(manifest['untouched'], 'yes')
         self.assertEqual(manifest['VK_INSTANCE_LAYERS'], '')
         self.assertEqual(json.loads((prefix / 'fex-emu/Config.json').read_text())['Config'], {'DiskCache': '0', 'RootFS': 'kept'})

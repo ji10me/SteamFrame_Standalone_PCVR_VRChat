@@ -54,7 +54,7 @@ See the [detailed guide (Japanese)](installer/README.ja.md) for troubleshooting 
 
 On the development Frame, the user reported successful play in an instance with 80 people and in COMPLEX7, a world reported to exceed 800 MB. These are separate reports; they do not mean that COMPLEX7 was tested with 80 people. They do not establish support for displaying every avatar simultaneously or for every world.
 
-Version 0.3.7-alpha no longer stops when Steam has updated Proton Experimental to a newer build; it shows a warning and continues ([changes](docs/RELEASE_0_3_7.md)). FEX version checks remain strict. Since 0.3.6 a prebuilt FEX runtime is bundled, so no initial FEX compilation is needed. The DFR, video, audio, and swap runtime configuration is unchanged.
+Version 0.3.7-alpha supports Proton Experimental 11. It fixes installation stopping on updated Proton builds and works around VRChat freezing after 2FA or at world entry because of a GC error ([changes](docs/RELEASE_0_3_7.md)). FEX version checks remain strict. Since 0.3.6 a prebuilt FEX runtime is bundled, so no initial FEX compilation is needed. The DFR, video, audio, and swap runtime configuration is unchanged.
 On the same Frame, the exact EXE payload and bootstrap completed [uninstallation, reinstallation, and a subsequent VR launch (Japanese)](docs/REINSTALL_0_3_4.md) over authenticated SSH.
 A complete first-time Windows pairing, installation, administrator authentication, and uninstallation flow, as well as operation on another Frame, remains unverified.
 

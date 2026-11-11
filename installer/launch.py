@@ -23,8 +23,12 @@ def command(args, environment, release, config):
     out=list(args);out[out.index(old)]=str(Path(config['runtime'])/'fex-compat-tool');out[out.index(original)]=str(Path(config['proton'])/'proton')
     prefix=Path(config['prefix']);eac=prefix/'pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat'
     if not eac.is_dir():raise RuntimeError('Initialize VRChat EAC normally through Steam first.')
+    # VRChat's Unity 6 GC can stop with "Fatal error in GC: SuspendThread loop failed".
+    # Under FEX with Proton 11 this hid an invisible dialog and froze VRChat with fsync
+    # and ntsync; wineserver-side synchronization passed every Frame test.
     environment.update(STEAM_COMPAT_DATA_PATH=str(prefix),FEX_APP_CONFIG_LOCATION=str(prefix/'fex-emu')+'/',
-        FEX_APP_DATA_LOCATION=str(prefix)+'/',FEX_SERVERSOCKETPATH='frame-easy-vrchat',EAC_LAUNCHERDIR=str(eac))
+        FEX_APP_DATA_LOCATION=str(prefix)+'/',FEX_SERVERSOCKETPATH='frame-easy-vrchat',EAC_LAUNCHERDIR=str(eac),
+        PROTON_NO_FSYNC='1',PROTON_NO_ESYNC='1',PROTON_NO_NTSYNC='1')
     previous=[x for x in environment.get('STEAM_COMPAT_TOOL_PATHS','').split(':') if x]
     environment['STEAM_COMPAT_TOOL_PATHS']=':'.join([config['runtime'],config['proton'],*[x for x in previous if x not in (config['standard'],config['standard_proton'])]])
     return out
